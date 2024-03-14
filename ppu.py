@@ -409,8 +409,8 @@ class PPU(object):
             self.RenderNameTables(0,1,2,3)
 
             
-    #@jit
-    def RenderNameTableH(self, nt0,nt1):
+    
+    def RenderNameTableH(self, nt0, nt1):
         tempBuffer0 = self.NameTableArr(nt0)
         self.RenderNameTable(self.AttributeTables_data(nt0), tempBuffer0)
         
@@ -419,7 +419,7 @@ class PPU(object):
         
         self.FrameArray[0:480,0:768] = np.row_stack((np.column_stack((tempBuffer0,tempBuffer1,tempBuffer0)),np.column_stack((tempBuffer0,tempBuffer1,tempBuffer0))))
 
-    #@njit
+    
     def RenderNameTableV(self, nt0, nt2):
         tempBuffer0 = self.NameTableArr(nt0)
         self.RenderNameTable(self.AttributeTables_data(nt0), tempBuffer0)
@@ -518,7 +518,7 @@ class PPU(object):
     def NameTableArr(self, nt):
         NameTables = self.NameTables_data(nt)
         width = 8 * 32 if len(NameTables) > 0x1f else len(NameTables)  #256
-        height = ((len(NameTables) - 1) / 32 + 1) * 8 #240
+        height = ((len(NameTables) - 1) // 32 + 1) * 8 #240
         ntbuffer = np.zeros((height + 1,width + 1), np.uint8)
         for row in range(width / 8):
             for col in range(height / 8):
@@ -558,168 +558,7 @@ class PPU(object):
 
         return PatternTable'''
 
-PPU_type = nb.deferred_type()
-PPU_type.define(PPU.class_type.instance_type)
 
-'''                        
-#@jit
-def RenderNameTableH(FrameArray, VRAM, PatternTables,nt0,nt1):
-        tempBuffer0 = NameTableArr(NameTables_data(VRAM, nt0),PatternTables)
-        RenderNameTable(AttributeTables_data(VRAM, nt0), tempBuffer0)
-        tempBuffer1 = NameTableArr(NameTables_data(VRAM, nt1),PatternTables)
-        RenderNameTable(AttributeTables_data(VRAM, nt1), tempBuffer1)
-        FrameArray[0:480,0:768] = np.row_stack((np.column_stack((tempBuffer0,tempBuffer1,tempBuffer0)),np.column_stack((tempBuffer0,tempBuffer1,tempBuffer0))))
-
-#@njit
-def RenderNameTableV(FrameArray, VRAM, PatternTables, nt0, nt2):
-        tempBuffer0 = NameTableArr(self.NameTables_data(nt0),PatternTables)
-        RenderNameTable(AttributeTables_data(VRAM, nt0), tempBuffer0)
-        tempBuffer2 = NameTableArr(NameTables_data(VRAM, nt2),PatternTables)
-        RenderNameTable(AttributeTables_data(VRAM, nt2), tempBuffer2)
-        FrameArray[0:720,0:512] =  np.column_stack((np.row_stack((tempBuffer0,tempBuffer2,tempBuffer0)),np.row_stack((tempBuffer0,tempBuffer2,tempBuffer0))))
-
-        
-@njit    
-def RenderNameTables(VRAM,PatternTables,nt0,nt1,nt2,nt3):
-        
-        tempBuffer0 = AttributeTableArr(AttributeTables_data(VRAM,nt0), NameTableArr(NameTables_data(VRAM,nt0),PatternTables))
-        tempBuffer1 = AttributeTableArr(AttributeTables_data(VRAM,nt1), NameTableArr(NameTables_data(VRAM,nt1),PatternTables))
-        tempBuffer2 = AttributeTableArr(AttributeTables_data(VRAM,nt2), NameTableArr(NameTables_data(VRAM,nt2),PatternTables))
-        tempBuffer3 = AttributeTableArr(AttributeTables_data(VRAM,nt3), NameTableArr(NameTables_data(VRAM,nt3),PatternTables))
-
-        return np.row_stack((np.column_stack((tempBuffer3,tempBuffer2)),np.column_stack((tempBuffer1,tempBuffer0))))
-
-
-@njit
-def AttributeTables_data(VRAM,offset):
-        AttributeTablesAddress = 0x2000 + (offset * 0x400 + 0x3C0)
-        AttributeTablesSize = 0x40
-        return VRAM[AttributeTablesAddress: AttributeTablesAddress + AttributeTablesSize]
-    
-@njit
-def NameTables_data(VRAM,offset):
-        NameTablesAddress = 0x2000 + offset * 0x400
-        NameTablesSize = 0x3C0
-        return VRAM[NameTablesAddress: NameTablesAddress + NameTablesSize]
-
-@njit
-def RenderScanlineArray(VRAM, NameTable, PatternTable, Scanline):
-    offset = (Scanline - 1)  / 8 * 32
-    NameTableArray = VRAM[NameTable + offset: NameTable + offset + 32]
-    PTArr = PatternTableArr(VRAM[PatternTable: PatternTable + 0x1000])
-    NoAttriArray = NameTableArr(NameTableArray, PTArr)
-    return NoAttriArray
-
-@njit
-def paintBuffer(FrameBuffer,Pal,Palettes):
-    [rows, cols] = FrameBuffer.shape
-    img = np.zeros((rows, cols,3),np.uint8)
-    for i in range(rows):
-        for j in range(cols):
-            img[i, j] = Pal[Palettes[FrameBuffer[i, j]]]
-    return img
-
-#@jit
-
-
-
-@njit
-def RenderNameTable(AttributeTables, FrameBuffer):
-    tempFrame = np.zeros((257, 257),np.uint8)
-    for i in range(len(AttributeTables)):
-        col = i >> 3; row = i & 7
-        if AttributeTables[i] == 0:
-            continue
-        tempFrame[(col << 5)        :(col << 5) + 16 ,  (row << 5)      : (row  << 5) + 16] = (AttributeTables[i] & 0b11) << 2
-        tempFrame[(col << 5) + 16   :(col << 5) + 32 ,  (row << 5)      : (row  << 5) + 16] = (AttributeTables[i] & 0b110000) >> 2
-        tempFrame[(col << 5)        :(col << 5) + 16 ,  (row << 5) + 16 : (row  << 5) + 32] = (AttributeTables[i] & 0b1100)
-        tempFrame[(col << 5) + 16   :(col << 5) + 32 ,  (row << 5) + 16 : (row  << 5) + 32] = (AttributeTables[i] & 0b11000000) >> 4
-
-    
-    FrameBuffer |= tempFrame[0:240,0:256]
-
-    [rows, cols] = FrameBuffer.shape
-    for i in range(rows):
-        for j in range(cols):
-            if FrameBuffer[i,j] & 3 == 0: 
-                FrameBuffer[i,j] == 0
-
-
-
-@njit
-def NameTableArr(NameTables, PatternTables):
-    width = 8 * 32 if len(NameTables) > 0x1f else len(NameTables)  #256
-    height = ((len(NameTables) - 1) / 32 + 1) * 8 #240
-    ntbuffer = np.zeros((height + 1,width + 1), np.uint8)
-    for row in range(width / 8):
-        for col in range(height / 8):
-            if NameTables[col * 32 + row] == 0:
-                continue
-            ntbuffer[col << 3 :(col << 3) + 8 ,row  << 3: (row  << 3) + 8] = PatternTables[NameTables[col * 32 + row]]
-    
-    return ntbuffer[0:height,0:width]
-    
-
-@njit
-def PatternTableArr(Pattern_Tables):
-    PatternTable = np.zeros((len(Pattern_Tables)>>4,8,8),np.uint8)
-    bitarr = range(0x7,-1,-1)
-    for TileIndex in range(len(Pattern_Tables)>>4):
-        for TileY in range(8):
-            PatternTable[TileIndex,TileY] = np.array([1 if (Pattern_Tables[(TileIndex << 4) + TileY]) & (2**bit) else 0 for bit in bitarr], np.uint8) + \
-                                            np.array([2 if (Pattern_Tables[(TileIndex << 4) + TileY + 8]) & (2**bit) else 0 for bit in bitarr], np.uint8)
-
-    return PatternTable
-'''
-@njit
-def byte2bit1(byte):
-    return np.array([1 if (byte) & (2**bit) else 0 for bit in range(0x7,-1,-1)], np.uint8)
-@njit
-def byte2bit2(byte):
-    return  np.array([2 if (byte) & (2**bit) else 0 for bit in range(0x7,-1,-1)], np.uint8)
-            
-
-'''        elif addr == 5:
-            if( not self.ScrollToggle):
-                #First write
-                #tile X t:0000000000011111=d:11111000
-                self.loopy_t = (self.loopy_t & 0xFFE0)|(value>>3)
-		#scroll offset X x=d:00000111
-                self.loopy_x = value & 0x07
-            else:
-                #Second write
-		#tile Y t:0000001111100000=d:11111000
-                self.loopy_t = (self.loopy_t & 0xFC1F)|((value & 0xF8)<<2)
-		#scroll offset Y t:0111000000000000=d:00000111
-                self.loopy_t = (self.loopy_t & 0x8FFF)|((value & 0x07)<<12)
-
-
-            
-        elif addr == 6:
-            if( not self.ScrollToggle):
-                #First write
-		#t:0011111100000000=d:00111111
-                # t:1100000000000000=0
-                self.loopy_t = (self.loopy_t & 0x00FF)|((value & 0x3F)<<8)
-
-            else:
-                #Second write
-		#// t:0000000011111111=d:11111111
-                self.loopy_t = (self.loopy_t & 0xFF00)|value
-		#v=t
-                self.loopy_v = self.loopy_t
-
-'''
-
-
-
-@njit        
-def adc1(reg):
-    reg.a += 1
-
-
-def adc2(reg):
-    reg.a += 2
                     
 if __name__ == '__main__':
     ppu = PPU()
