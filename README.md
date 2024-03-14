@@ -1,5 +1,5 @@
 # py-nes
-NES(FC) Emulator in Python 2.7 + jitclass
+NES(FC) Emulator in Python 3.12 + jitclass
 
 #features
 1. cpu6502 running
