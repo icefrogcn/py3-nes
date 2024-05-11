@@ -8,7 +8,7 @@ import numpy as np
 
 #from main import cartridge
 
-
+mapper_spec = []
 #@jitclass
 class MAPPER:
     #cartridge: cartridge

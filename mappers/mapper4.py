@@ -6,17 +6,15 @@ from numba import int8,uint8,int16,uint16,uint32
 import numba as nb
 import numpy as np
 
-from main import MAPPER,MAIN_class_type
-
 
 MMC3_IRQ_KLAX = 1
 MMC3_IRQ_SHOUGIMEIKAN = 2
 MMC3_IRQ_DAI2JISUPER = 3
 
 
-spec = [('cartridge',MAIN_class_type),
+mapper_spec = [#('cartridge',MAIN_class_type),
         ('reg',uint8[:]),
-        ('prg0',uint8),        ('prg1',uint8),
+        ('prg0',uint8), ('prg1',uint8),
         ('chr01',uint8),('chr23',uint8),('chr4',uint8),('chr5',uint8),('chr6',uint8),('chr7',uint8),
         ('we_sram',uint8),
         ('irq_type',uint8),
@@ -29,11 +27,11 @@ spec = [('cartridge',MAIN_class_type),
         ('scanline',uint16),
         ('RenderMethod',uint8)
         ]
-@jitclass(spec)
+#@jitclass(spec)
 class MAPPER(object):
 
 
-    def __init__(self,cartridge = MAPPER()):
+    def __init__(self,cartridge):
         self.cartridge = cartridge
 
         self.reg = np.zeros(0x8, np.uint8)
@@ -51,7 +49,7 @@ class MAPPER(object):
 
         self.scanline = 0
 
-        self.RenderMethod = POST_RENDER
+        self.RenderMethod = 0#POST_RENDER
 
     @property
     def Mapper(self):
@@ -219,12 +217,14 @@ class MAPPER(object):
                                                  self.chr4, self.chr5, self.chr6, self.chr7 );
             
 
-MAPPER_type = nb.deferred_type()
-MAPPER_type.define(MAPPER.class_type.instance_type)
+#MAPPER_type = nb.deferred_type()
+#MAPPER_type.define(MAPPER.class_type.instance_type)
 
 
 if __name__ == '__main__':
-    mapper = MAPPER()
+    from main import cartridge
+    mapper = MAPPER(cartridge())
+    print(mapper)
 
 
 

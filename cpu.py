@@ -29,24 +29,8 @@ from ppu import PPU
 from joypad import JOYPAD
 from mappers.main import *
 from mappers.main import CreateMapper
-#from mappers.mapper import MAPPER,MAPPER_type
 
 
-'''
-n_map = 0
-
-def setmap(mapper = 0,old = False):
-    global n_map
-    if old:
-        return ''
-    else:
-        n_map = mapper
-        return str(n_map)
-
-print 'mappers.mapper%d' %n_map
-cartridge = __import__('mappers.mapper%s' %setmap(old = True),fromlist = ['MAPPER','MAPPER_type'])
-MAPPER = cartridge.MAPPER
-MAPPER_type = cartridge.MAPPER_type'''
 
 C_FLAG = np.uint8(0x01)	#	# 1: Carry
 Z_FLAG = np.uint8(0x02)	#	# 1: Zero
@@ -75,8 +59,8 @@ CPU_Memory_type = nb.deferred_type()
 CPU_Memory_type.define(CPU_Memory.class_type.instance_type)
 CPU_Reg_type = nb.deferred_type()
 CPU_Reg_type.define(CPU_Reg.class_type.instance_type)
-PPU_type = nb.deferred_type()
-PPU_type.define(PPU.class_type.instance_type)
+#PPU_type = nb.deferred_type()
+#PPU_type.define(PPU.class_type.instance_type)
 JOYPAD_type = nb.deferred_type()
 JOYPAD_type.define(JOYPAD.class_type.instance_type)
 
@@ -112,7 +96,7 @@ cpu_spec = [('PC',uint16),
             ('MapperWriteAddress',uint16),
             ('FrameFlag',uint8),
             ('Frames',uint32),
-            ('PPU',PPU_type),
+            #('PPU',PPU_type),
             ('RenderMethod',uint8),
             ('ChannelWrite',uint8[:]),
             #('MAPPER',MAPPER),
@@ -126,7 +110,7 @@ cpu_spec = [('PC',uint16),
 ChannelWrite = np.zeros(0x4,np.uint8)
 
 
-print('loading CPU CLASS')  
+#print('loading CPU CLASS')  
         
 #@jitclass
 class cpu6502(object):
@@ -187,10 +171,10 @@ class cpu6502(object):
         #self.AddressMask =0 #Long 'Integer
         self.reg = reg
         self.PC = 0          
-        self.A = 0           
-        self.X = 0            
-        self.Y = 0             
-        self.S = 0              
+        self.A = np.uint8(0)           
+        self.X = np.uint8(0)             
+        self.Y = np.uint8(0)              
+        self.S = np.uint8(0)               
         self.P = 0            
         self.DT = 0 
         self.WT = 0 
@@ -277,7 +261,7 @@ class cpu6502(object):
     def ZPRD(self,A):
         return self.bank0[A & 0xFF]
     def ZPRDW(self,A):
-        return self.bank0[A& 0xFF] + (self.bank0[(A + 1)& 0xFF] << 8)
+        return self.bank0[A & 0xFF] + (self.bank0[(A + 1)& 0xFF] << 8)
     
     def ZPWR(self,A,V):
         self.bank0[A & 0xFF] = V
@@ -291,7 +275,9 @@ class cpu6502(object):
     def CHECK_EA(self):
         if((self.ET&0xFF00) != (self.EA&0xFF00) ):self.ADD_CYCLE(1); 
     
-    def SET_ZN_FLAG(self,A): self.P &= ~(Z_FLAG|N_FLAG); self.P |= self.ZN_Table[A];
+    def SET_ZN_FLAG(self,A):
+        self.P &= ~(Z_FLAG|N_FLAG)
+        self.P |= self.ZN_Table[A & 0xFF]
     
     def SET_FLAG(self, V):
         self.P |=  V
@@ -824,7 +810,8 @@ class cpu6502(object):
 
     def log(self,*args):
         if self.debug:
-            print(args)
+            pass
+        #print(args)
 
 
 
@@ -843,22 +830,22 @@ class cpu6502(object):
 
     def EmulationCPU(self,basecycles):
         self.base_cycles += basecycles
-        cycles = int(self.base_cycles/12) - self.emul_cycles
+        cycles = int(self.base_cycles//12) - self.emul_cycles
         if cycles > 0:
             self.emul_cycles += self.EXEC6502(cycles)
 
     def EmulationCPU_BeforeNMI(self,cycles):
         self.base_cycles += cycles
-        self.emul_cycles += self.EXEC6502(cycles/12)
+        self.emul_cycles += self.EXEC6502(cycles//12)
 
 
 
     @property
-    def FrameRender(self):
+    def FRAME_RENDER(self):
         return np.uint8(0x1)
     @property
     def isFrameRender(self):
-        return self.FrameFlag & self.FrameRender
+        return self.FrameFlag & self.FRAME_RENDER
     @property
     def FrameSound(self):
         return np.uint8(0x2)
@@ -870,8 +857,8 @@ class cpu6502(object):
     def run6502(self):
         while self.Running:
             if self.isFrameRender:
-                self.FrameFlag &= ~self.FrameRender
-                return self.FrameRender
+                self.FrameFlag &= ~self.FRAME_RENDER
+                return self.FRAME_RENDER
 
             if self.isFrameSound:
                 self.FrameFlag &= ~self.FrameSound
@@ -933,7 +920,7 @@ class cpu6502(object):
                         
                     if self.PPU.CurrentLine == 261:
                         self.PPU.VBlankEnd()
-                        self.FrameFlag |= self.FrameRender
+                        self.FrameFlag |= self.FRAME_RENDER
 
                     if( self.RenderMethod == POST_RENDER ):
                         if self.PPU.CurrentLine == 241:

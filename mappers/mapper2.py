@@ -1,24 +1,27 @@
 # -*- coding: UTF-8 -*-
+
 from numba import jit
 from numba.experimental import jitclass
 from numba import int8,uint8,int16,uint16,uint32
 import numba as nb
 import numpy as np
 
-from main import MAPPER
+mapper_spec = []
 
-
-
-@jitclass
+#@jitclass
 class MAPPER(object):
-    cartridge: MAPPER
-    RenderMethod: uint8
+    #cartridge: MAPPER
+    #RenderMethod: uint8
 
     
-    def __init__(self,cartridge=MAPPER()):
+    def __init__(self,cartridge):
         self.cartridge = cartridge
-        self.RenderMethod = 0
+        
 
+    @property
+    def RenderMethod(self):
+        return 0
+    
     @property
     def Mapper(self):
         return 2
@@ -46,7 +49,9 @@ class MAPPER(object):
 
 
 if __name__ == '__main__':
-    mapper = MAPPER()
+    from main import cartridge
+    mapper = MAPPER(cartridge())
+    print(mapper)
 
 
 

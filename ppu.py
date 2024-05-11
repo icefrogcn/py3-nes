@@ -13,7 +13,7 @@ from numba import uint8,uint16
 
 
 from memory import Memory
-from ppu_reg import PPUREG#, PPU_reg_type, PPUBIT, PPU_bit_type
+from ppu_reg import PPUREG, PPUBIT
 from ppu_memory import PPU_Memory
 #from ppu_memory import PPU_memory_type
 from rom import ROM#,ROM_class_type
@@ -21,13 +21,23 @@ from rom import ROM#,ROM_class_type
 from pal import BGRpal
 
 #PPU
-
+PPU_Memory_type = nb.deferred_type()
+PPU_Memory_type.define(PPU_Memory.class_type.instance_type)
+PPU_Reg_type = nb.deferred_type()
+PPU_Reg_type.define(PPUREG.class_type.instance_type)
+ROM_class_type = nb.deferred_type()
+ROM_class_type.define(ROM.class_type.instance_type)
         
 
-print('loading PPU CLASS')      
-'''@jitclass([('CurrentLine',uint16),('HScroll',uint16),('vScroll',uint16), ('scX',uint16), ('scY',uint16), \
-           ('reg',PPU_reg_type),
-           ('memory',PPU_memory_type),
+#print('loading PPU CLASS')      
+'''@jitclass('''
+ppu_spec = [('CurrentLine',uint16),
+            ('HScroll',uint16),
+            ('vScroll',uint16),
+            ('scX',uint16),
+            ('scY',uint16), \
+           ('reg',PPU_Reg_type),
+           ('memory',PPU_Memory_type),
            ('ROM',ROM_class_type),
            ('PatternTableTiles',uint8[:,:,:]),
            ('Pal',uint8[:,:]), 
@@ -36,16 +46,17 @@ print('loading PPU CLASS')
            ('FrameNT1',uint8[:,:]),
            ('FrameNT2',uint8[:,:]),
            ('FrameNT3',uint8[:,:]),
-           #('FrameBuffer',uint8[:,:,:]),
+           ('FrameBuffer',uint8[:,:,:]),
            ('Running',uint8),
            ('render',uint8),
            ('tilebased',uint8),
            ('debug',uint8),
            ('ScanlineSPHit',uint8[:])
-    ])'''
+    ]
 
-@jitclass
+#@jitclass
 class PPU(object):
+    '''
     CurrentLine:uint16
     HScroll:uint16
     vScroll:uint16
@@ -67,7 +78,7 @@ class PPU(object):
     tilebased:uint8
     debug:uint8
     ScanlineSPHit:uint8[:]
-    
+'''
     def __init__(self, memory = Memory(), ROM = ROM(), pal = BGRpal(), debug = 0):
         self.CurrentLine = 0 
         self.HScroll = 0
@@ -199,7 +210,9 @@ class PPU(object):
         self.CurrentLine += value
                 
     def RenderScanline(self):
-        '''if self.CurrentLine == 0:
+        if self.CurrentLine == 0:
+            pass
+            '''
             self.FrameStart()
             self.ScanlineNext()
             #mapper->HSync( scanline )
@@ -212,16 +225,17 @@ class PPU(object):
             self.loopy_shift0 = self.loopy_shift
             
             self.NTnum = self.Control1 & PPU_NAMETBL_BIT
-        
+        '''
         elif self.CurrentLine < 240:
+            pass
+            '''
             self.ScanlineNext()
             #mapper->HSync( scanline )
             self.ScanlineStart()
-'''
+            '''
+
         if self.CurrentLine > 239:return
         
-        if self.CurrentLine == 0:
-            pass
         
         #if self.CurrentLine < 8 :
             #self.Status = self.Status & 0x3F

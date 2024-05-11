@@ -6,7 +6,7 @@ from numba import uint8,uint16
 from numba.typed import Dict
 from numba import types
 
-print('loading MEMORY CLASS')
+#print('loading MEMORY CLASS')
 '''@jitclass([('VRAM',uint8[:]), \
            ('SpriteRAM',uint8[:]), \
            ('RAM',uint8[:,:]) \

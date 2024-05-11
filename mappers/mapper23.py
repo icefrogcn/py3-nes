@@ -1,15 +1,15 @@
 # -*- coding: UTF-8 -*-
 
-from numba import jit,jitclass
+from numba import jit
+from numba.experimental import jitclass
 from numba import int8,uint8,int16,uint16,uint32
 import numba as nb
 import numpy as np
 
-from main import *
-from main import MAPPER,MAIN_class_type
 
 
-spec = [('cartridge',MAIN_class_type),
+
+mapper_spec = [#('cartridge',MAIN_class_type),
         ('reg',uint8[:]),
         ('irq_enable',uint8),
         ('irq_counter',uint8),
@@ -19,11 +19,11 @@ spec = [('cartridge',MAIN_class_type),
         ('addrmask',uint16),
         ('RenderMethod',uint8)
         ]
-@jitclass(spec)
+#@jitclass(spec)
 class MAPPER(object):
 
 
-    def __init__(self,cartridge = MAPPER()):
+    def __init__(self,cartridge):
         self.cartridge = cartridge
 
         self.reg = np.zeros(0x9, np.uint8)
@@ -35,7 +35,7 @@ class MAPPER(object):
         
         self.addrmask = 0xFFFF
 
-        self.RenderMethod = POST_RENDER
+        self.RenderMethod = 0#POST_RENDER
 
     @property
     def Mapper(self):
@@ -141,11 +141,6 @@ class MAPPER(object):
         return False
 
 
-
-    
-
-MAPPER_type = nb.deferred_type()
-MAPPER_type.define(MAPPER.class_type.instance_type)
 
 
 if __name__ == '__main__':

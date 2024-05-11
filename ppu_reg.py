@@ -98,11 +98,8 @@ class PPUBIT(object):
     def SP_COLOR_BIT(self):
         return 0x03
 
-#PPU_bit_type = nb.deferred_type()
-#PPU_bit_type.define(PPUBIT.class_type.instance_type)
 
 
-print('loading PPU REGISTER CLASS')
 '''@jitclass([('bit',PPU_bit_type), \
            ('memory',PPU_memory_type), \
            ('reg',uint16[:]), \

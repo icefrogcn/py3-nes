@@ -6,19 +6,17 @@ from numba import int8,uint8,int16,uint16,uint32
 import numba as nb
 import numpy as np
 
-from main import MAPPER, MAIN_class_type
 
-
-spec = [('cartridge',MAIN_class_type),
-        ('RenderMethod',uint8)              
-        ]
-@jitclass(spec)
 class MAPPER(object):
 
-    def __init__(self,cartridge = MAPPER()):
+    def __init__(self,cartridge):
         self.cartridge = cartridge
-        self.RenderMethod = 0
+        
 
+    @property
+    def RenderMethod(self):
+        return 0
+    
     @property
     def Mapper(self):
         return 3
@@ -49,8 +47,8 @@ class MAPPER(object):
         return False
     def HSync(self,scanline):
         return False
-MAPPER_type = nb.deferred_type()
-MAPPER_type.define(MAPPER.class_type.instance_type)
+
+
 
 if __name__ == '__main__':
     mapper = MAPPER()

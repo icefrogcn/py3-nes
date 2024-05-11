@@ -210,7 +210,7 @@ class cartridge(object):
         self.SetVROM_1K_Bank( page+1, bank*2+1 );
 
     def SetVROM_1K_Bank(self, page, bank):
-        print (bank,self.ROM.VROM_1K_SIZE)
+        #print (bank,self.ROM.VROM_1K_SIZE)
         bank %= self.ROM.VROM_1K_SIZE
         self.VRAM[page*0x400:page*0x400 + 0x400] = self.VROM[0x0400*bank:0x0400*bank + 0x400]
 

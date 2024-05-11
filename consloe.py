@@ -33,7 +33,7 @@ from cpu6502_opcodes import init6502
 
 
 
-from ppu import PPU
+
 from apu import APU
 from joypad import JOYPAD
 #import mappers
@@ -47,20 +47,7 @@ from mmc import MMC
 
 
 
-def CreateMapper(mapper = 0):
-    print("loading MAPPER CLASS %d" %mapper)
-    C_MAPPER = __import__('mappers.mapper%d' %mapper, fromlist=['MAPPER']).MAPPER
-    MAPPER_type = nb.deferred_type()
-    try:
-        MAPPER_type.define(C_MAPPER.class_type.instance_type)
-    except:
-        print (traceback.print_exc())
-        #MAPPER_type = None
-        cartridge_type = nb.deferred_type()
-        cartridge_type.define(cartridge.class_type.instance_type)
-        C_MAPPER = jitclass(C_MAPPER, [('cartridge',cartridge_type)])
-        MAPPER_type.define(C_MAPPER.class_type.instance_type)
-    return C_MAPPER, MAPPER_type
+
 
 
 class CONSLOE(MMC, NES):       
@@ -72,7 +59,7 @@ class CONSLOE(MMC, NES):
 
 
     
-    def __init__(self,debug = False):
+    def __init__(self,debug = False, jit = True):
         NESLoop = 0
         CPURunning = 1
         FirstRead = 1
@@ -81,8 +68,10 @@ class CONSLOE(MMC, NES):
         self.RAM = self.memory.RAM
     
         self.debug = debug
+        self.jit = jit
         self.nesROM = nesROM()
 
+        
         #self.Mapper = 999
         #self.APU.pAPUinit()
         #self.JOYPAD = JOYPAD()
@@ -95,7 +84,27 @@ class CONSLOE(MMC, NES):
     @property
     def status(self):
         return "PC:%d,clockticks:%d PPUSTATUS:%d,Frames %d,CurrLine:%d a:%d X:%d Y:%d S:%d p:%d opcode:%d " %self.CPU.status()
-    
+
+    def CreateMapper(self, mapper = 0):
+        Log_SYS("loading MAPPER CLASS %d" %mapper)
+        MAPPER = __import__('mappers.mapper%d' %mapper, fromlist=['MAPPER','mapper_spec'])
+        C_MAPPER = MAPPER.MAPPER
+        mapper_spec = MAPPER.mapper_spec
+        MAPPER_type = nb.deferred_type()
+        if self.jit:
+            try:
+                if not hasattr(C_MAPPER,"class_type"):
+                    cartridge_type = nb.deferred_type()
+                    cartridge_type.define(cartridge.class_type.instance_type)
+                    mapper_spec.append(('cartridge',cartridge_type))
+                    C_MAPPER = jitclass(C_MAPPER, mapper_spec)
+                MAPPER_type.define(C_MAPPER.class_type.instance_type)
+                    
+            except:
+                print(traceback.print_exc())
+            
+        return C_MAPPER, MAPPER_type
+
     def LoadROM(self,filename):
         self.ROM = self.nesROM.LoadROM(filename)
         #self.Mapper = self.ROM.Mapper
@@ -107,9 +116,9 @@ class CONSLOE(MMC, NES):
             for item in str(bytearray(read_file_to_array(cheat_file))).split('\n'):
                 if '#' in item:
                     self.CheatCode.append(item.split()[1])
-            print('CheatCode File Found...Loading')
+            Log_SYS('CheatCode File Found...Loading')
         else:
-            print('CheatCode File Not Found...')
+            Log_SYS('CheatCode File Not Found...')
         
             
     def PowerON(self):
@@ -122,9 +131,28 @@ class CONSLOE(MMC, NES):
     def initMIDI(self):
         pass
 
-    def Load_MAPPER_New(self):
+    def jitObject(self, classObject, classObject_spec, classObject_type, classObjectAddition={}):
+        if self.jit:
+            try:
+                if not hasattr(classObject,"class_type"):
+                    for key in classObjectAddition:
+                        #Object_type = nb.deferred_type()
+                        #Object_type.define(classObjectAddition[key].class_type.instance_type)
+                        classObject_spec.append((key,classObjectAddition[key]))
+                    #print(classObject_spec)
+                    jitObject = jitclass(classObject, classObject_spec)
+                    #jitObject_type = nb.deferred_type()
+                    classObject_type.define(jitObject.class_type.instance_type)
+
+                    return jitObject
+            except:
+                print(traceback.print_exc())
+            
+        return classObject
         
-        C_MAPPER,self.MAPPER_type = CreateMapper(self.ROM.Mapper)  #choose correct mapper class without jit
+    def import_MAPPER_class(self):
+        Log_SYS('init MAPPER')
+        C_MAPPER,self.MAPPER_type = self.CreateMapper(self.ROM.Mapper)  #choose correct mapper class without jit
         
         #cart = cartridge(self.ROM, self.memory)
         self.MAPPER = C_MAPPER(cartridge(self.ROM, self.memory))
@@ -133,93 +161,83 @@ class CONSLOE(MMC, NES):
 
         #return 
 
-    def Load_MAPPER_Old(self):
-        #shutil.copyfile('mappers/main.py','mappers/mapper.py' )  #set OLD MAPPER class
-        #fresh_pyc("mappers/mapper.pyc")
-        #cartridge = __import__('mappers.mapper',fromlist = ['MAPPER'])#['MAIN',MAIN_class_type])
-        from mappers import mapper
-        reload(mapper)
-        return mapper.MAPPER(self.ROM, self.memory)
-
     def import_CPU_class(self):
-        print(print_now(),'init CPU')
-
-        self.Load_CPU_NEW()
+        Log_SYS('loading CPU CLASS')
+        from cpu import cpu6502,cpu_spec
+        addition_spec = {
+            'PPU': self.PPU_type,
+            'MAPPER':self.MAPPER_type
+            }
+        self.CPU_type = nb.deferred_type()
+        return self.jitObject(cpu6502, cpu_spec, self.CPU_type, addition_spec)
         
             
-    def Load_CPU_OLD(self):
-        fresh_pyc("cpu6502.pyc")
-        import cpu6502
-        reload(cpu6502)
-        return cpu6502.cpu6502(self.memory, self.PPU, self.MAPPER, self.APU.ChannelWrite)#, #self.APU,)
-        
-    def Load_CPU_NEW(self):
-        from cpu import cpu6502,cpu_spec
-        print('loading NEW CPU CLASS')
-        cpu_spec.append(('MAPPER',self.MAPPER_type))
-        cpu = jitclass(cpu6502, cpu_spec)
-        #cpu = cpu6502
+    def Load_CPU(self):
+        cpu = self.import_CPU_class()
         self.CPU = cpu(MAPPER = self.MAPPER,
                         memory = self.memory,
                         PPU = self.PPU,
                         ChannelWrite = self.APU.ChannelWrite)#, #self.APU,)
+        Log_SYS('init CPU')
+
+    def import_PPU_class(self):
+        Log_SYS('loading PPU CLASS')
+        from ppu import PPU,ppu_spec
+        self.PPU_type = nb.deferred_type()
+        return self.jitObject(PPU, ppu_spec, self.PPU_type)
+        
+    def Load_PPU(self):
+        cPPU = self.import_PPU_class()
+        self.PPU = cPPU(self.memory, self.ROM)
+        print(self.PPU)
+        Log_SYS('init PPU')
+        self.PPU.pPPUinit(self.PPU_Running,self.PPU_render,self.PPU_debug)
 
     
     def StartingUp(self):
-        print ('RESET')
+        Log_SYS('RESET')
         self.memory.RAM[::] = 0
         self.memory.VRAM[:] = 0
         self.memory.SpriteRAM[:] = 0
         
-        print (print_now(),'init APU')
+        Log_SYS('init APU')
         self.APU = APU(self.memory)
         
         init6502()
         #PPU = __import__('ppu',fromlist = ['PPU'])
-        print (print_now(),'init PPU')
-        self.PPU = PPU(self.memory, self.ROM)
-        self.PPU.pPPUinit(self.PPU_Running,self.PPU_render,self.PPU_debug)
+        
         #self.FrameBuffer = self.PPU.FrameBuffer
         
-        print (print_now(),'init MAPPER')
+        
 
         try:
             
-            self.Load_MAPPER_New()
+            self.import_MAPPER_class()
             
-            self.import_CPU_class()
+            self.Load_PPU()
+            
+            self.Load_CPU()
+            
             self.CPU.SET_NEW_MAPPER_TRUE()
             
             self.CPU.MAPPER.reset()
             
             LoadNES = 1
-            print (print_now(),"NEW MAPPER process")
+            Log_SYS("NEW MAPPER process")
 
 
         except:
             print (traceback.print_exc())
             
-       
-            self.MAPPER = self.Load_MAPPER_Old()
-            self.CPU = self.Load_CPU_OLD()
-            self.CPU.SET_NEW_MAPPER_FALSE()
-                
-            if( NES.VROM_8K_SIZE ):
-                self.Select8KVROM(0)
-                
-            LoadNES = self.MapperChoose(NES.Mapper)
-            print (print_now(),'OLD MapperWrite')
-
-
-        print (self.CPU.RAM)
-        print (type(self.CPU.RAM))
+        print(self.CPU.RAM)
+        print(type(self.CPU.RAM))
 
         
         if LoadNES == 0 :
             return False
 
  
-        print (print_now(),"Successfully loaded %s" %self.nesROM.filename)
+        Log_SYS("Successfully loaded %s" %self.nesROM.filename)
         
         self.start = time.time()
         self.totalFrame = 0
@@ -228,25 +246,20 @@ class CONSLOE(MMC, NES):
         self.PowerON()
         self.ScreenShow()
 
-
-
         
-        print (print_now(),"The number of CPU is:",str(multiprocessing.cpu_count()))
-        print (print_now(),'Parent process %s.' % os.getpid())
+        Log_SYS("The number of CPU is:",str(multiprocessing.cpu_count()))
+        Log_SYS('Parent process %s.' % os.getpid())
         self.pool = multiprocessing.Pool(multiprocessing.cpu_count())
-
             
         self.Running = 1
 
         self.CPU.reset6502()
         print ('6502 reset:', self.status )
+
+        self.thread_show(target = self.Waiting_compiling)
         
-        Waiting_thread = threading.Thread(target = self.Waiting_compiling)
-        Waiting_thread.setDaemon(True)
-        #Waiting_thread.start()
-        fps_thread = threading.Thread(target = self.ShowFPS)
-        fps_thread.setDaemon(True)
-        fps_thread.start()
+        self.thread_show(target = self.ShowFPS)
+        
         #if self.PPU_Running and self.PPU_render:
 
         #    blit_thread.start()
@@ -254,7 +267,13 @@ class CONSLOE(MMC, NES):
         self.run()
 
         self.PowerOFF()
-    
+        
+    def thread_show(self,target):
+        Waiting_thread = threading.Thread(target = target)
+        Waiting_thread.daemon = True
+        Waiting_thread.start()
+
+        
     def run(self):
         blit_delay = 0
         self.realFrames = 0
@@ -268,10 +287,12 @@ class CONSLOE(MMC, NES):
             Flag = self.CPU.run6502()
 
             if Flag == self.CPU.FrameSound:
+                pass
+                #Log_HW('Play Sound')
                 self.APU.updateSounds(self.CPU.Frames)
 
             
-            if Flag == self.CPU.FrameRender:
+            if Flag == self.CPU.FRAME_RENDER:
                 #self.CPU.FrameRender_ZERO()
                 #Frames = self.CPU.Frames
                 if forceblit or self.CPU.Frames % wish_fps == 0 or blit_delay/((self.CPU.Frames % wish_fps) + 1) <= (1.000/wish_fps):
@@ -293,8 +314,8 @@ class CONSLOE(MMC, NES):
 
                 
             
-            if self.CPU.isMapperWrite:
-                self.MapperWrite(self.CPU.MapperWriteAddress, self.CPU.MapperWriteData)
+            #if self.CPU.isMapperWrite:
+            #    self.MapperWrite(self.CPU.MapperWriteAddress, self.CPU.MapperWriteData)
            
             
             
@@ -310,16 +331,17 @@ class CONSLOE(MMC, NES):
                 self.RAM[0,addr] = value
                 
     def Waiting_compiling(self):
-        print (print_now(),'First runing jitclass, compiling is a very time-consuming process...')
-        print (print_now(),'take about 120 seconds (i3-6100U)...ooh...waiting...')
+        if not self.jit:return
+        Log_SYS('First runing jitclass, compiling is a very time-consuming process...')
+        Log_SYS('take about 120 seconds (i3-6100U)...ooh...waiting...')
         start = time.time()
         while self.CPU.Frames == 0:
-            print( print_now(),'jitclass is compiling...',((time.time()- start) / 1.20) , '%', self.CPU.clockticks6502)
+            Log_SYS('jitclass is compiling...%f %% %d' %((time.time()- start) / 1.20 , self.CPU.clockticks6502))
             #print '6502:',self.status
             if self.CPU.clockticks6502 > 0:break
             if ((time.time()- start) / 3.00) > 150:break
             time.sleep(5)
-        print (print_now(),'jitclass compiled...')
+        Log_SYS('jitclass compiled...')
         
         #while self.CPU.FrameFlag & self.CPU.FrameRender:
         #    self.blitFrame()
@@ -335,7 +357,7 @@ class CONSLOE(MMC, NES):
         if self.PPU_Running:
             if self.CPU.Frames:
                 if self.PPU_render:
-                    #self.PPU.RenderFrame()
+                    self.PPU.RenderFrame()
                     
                     if self.debug:
                         pass
@@ -416,6 +438,7 @@ class CONSLOE(MMC, NES):
         totalFrame = 0
         while self.Running:
             time.sleep(2)
+            if self.CPU.Frames == nowFrames:break
             nowFrames = self.CPU.Frames
             duration = time.time() - start
             #if duration > 4:
@@ -428,93 +451,6 @@ class CONSLOE(MMC, NES):
             print (self.PPU.Palettes)
             
             totalFrame = nowFrames
-        
-    def MapperChoose(self,MapperType):
-        MapperChoose = 1
-        if MapperType == 0:
-            self.Select8KVROM(0)
-
-            if self.nesROM.PrgCount >= 2:
-                
-                self.reg8 = 0; self.regA = 1; self.regC = 2; self.regE = 3
-                
-            elif self.nesROM.PrgCount == 1:
-                self.reg8 = 0; self.regA = 1; self.regC = 0; self.regE = 1
-            else:
-                self.reg8 = 0; self.regA = 0; self.regC = 0; self.regE = 0
-            self.SetupBanks()
-            
-        elif MapperType == 1:
-            self.Select8KVROM(0)
-            self.reg8 = 0; self.regA = 1; self.regC = 0xFE; self.regE = 0xFF
-            self.SetupBanks()
-            self.sequence = 0
-            self.accumulator = 0
-            self.data = [0] * 4
-            self.data[0] = 0x1F
-            self.data[3] = 0
-        
-        elif MapperType == 2:
-            self.reg8 = 0
-            self.regA = 1
-            self.regC = 0xFE
-            self.regE = 0xFF
-            self.SetupBanks()
-            
-        elif MapperType == 3:
-            self.Select8KVROM(0)
-            self.reg8 = 0
-            self.regA = 1
-            self.regC = 0xFE
-            self.regE = 0xFF
-            self.SetupBanks()
-            
-        elif MapperType == 4:
-            MMC.swap = 0
-            self.reg8 = 0
-            self.regA = 1
-            self.regC = 0xFE
-            self.regE = 0xFF
-            self.MMC3_Sync()
-            MMC.MMC3_IrqVal = 0
-            MMC.irq_enable = False
-            MMC.MMC3_TmpVal = 0
-            if NES.VROM_8K_SIZE :
-                self.Select8KVROM(0)
-
-            
-        else:
-            print ("Unsupport Mapper",MapperType)
-            MapperChoose = 0
-        return MapperChoose
-
-    '===================================='
-    '       MapperWrite(Address,value)   '
-    ' Selects/Switches Chr-ROM & Prg-  '
-    ' ROM depending on the mapper. Based '
-    ' on DarcNES.                        '
-    '===================================='
-
-    def MapperWrite(self,MapperWriteAddress, MapperWriteData):
-        self.CPU.MapperWriteFlag_ZERO()
-        #print 'OLD MapperWrite'
-        if NES.Mapper == 0:
-            pass
-        elif NES.Mapper == 1:
-            self.map1_write(MapperWriteData, MapperWriteAddress)
-        elif NES.Mapper == 2:
-            self.reg8 = MapperWriteData * 2
-            self.regA = self.reg8 + 1
-            self.SetupBanks()
-            
-        elif NES.Mapper == 3:
-            self.Select8KVROM(MapperWriteData & self.ROM.AndIt)
-            
-        elif NES.Mapper == 4:
-            self.MMC3Write(MapperWriteData, MapperWriteAddress) #' this function is too big to store here..
-            
-        else:
-            print( "Unsupport MapperWrite", NES.Mapper)
         
     #@deco
     def MaskVROM(self, page, mask):
@@ -811,10 +747,10 @@ def fresh_pyc(pyc):
     if '.pyc' in pyc:
         if os.path.exists(pyc):os.remove(pyc)
 
-def run(debug = False):
+def run(debug = False, jit = True):
     ROMS = roms_list()
     ROMS_INFO = get_roms_mapper(ROMS)
-    fc = CONSLOE(debug)
+    fc = CONSLOE(debug,jit)
 
     while True:
         show_choose(ROMS_INFO)
@@ -835,18 +771,9 @@ def run(debug = False):
 
 
 if __name__ == '__main__':
-    #C_MAPPER, MAPPER_type = CreateMapper(0)
-    #cartridge_type = nb.deferred_type()
-    #cartridge_type.define(cartridge.class_type.instance_type)
-    #jitclass(C_MAPPER, [('cartridge',cartridge_type)])
-    #C_MAPPER(cartridge())
-    #mapper = jitclass(C_MAPPER, [()])
-    #mapper(cartridge())
-    #cpu = cpu6502(MAPPER = MAPPER())
 
-
-    
-    run(True)
+    run(debug = True)
+    #run(debug = True, jit = False)
     #run()
 
         

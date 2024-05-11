@@ -12,7 +12,7 @@ from numba import types
 
 from memory import Memory#,memory_type
 
-print('loading PPU MEMORY INFO CLASS')
+#print('loading PPU MEMORY INFO CLASS')
 '''@jitclass([('memory',memory_type), \
            ('PRGRAM',uint8[:,:]), \
            ('VRAM',uint8[:]), \
@@ -58,10 +58,6 @@ class PPU_Memory(object):
         else:
             return self.VRAM[addr]
         return data
-        
-#PPU_memory_type = nb.deferred_type()
-#PPU_memory_type.define(PPU_Memory.class_type.instance_type)
-
         
 
                     

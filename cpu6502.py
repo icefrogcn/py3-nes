@@ -75,7 +75,7 @@ cpu_spec = [('PC',uint16),
 ChannelWrite = np.zeros(0x4,np.uint8)
 
 
-print('loading OLD CPU CLASS')
+#print('loading OLD CPU CLASS')
 
 @jitclass(cpu_spec)
 class cpu6502(object):
