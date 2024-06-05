@@ -14,6 +14,8 @@ import traceback
 #CPU Memory Map
 
 #自定义类
+from deco import *
+from jitcompile import jitObject
          
 import memory
 from nes import NES
@@ -113,7 +115,7 @@ ChannelWrite = np.zeros(0x4,np.uint8)
 #print('loading CPU CLASS')  
         
 #@jitclass
-class cpu6502(object):
+class CPU6502(object):
     'Registers & tempregisters'
     '''PC:uint16
     A: uint8
@@ -2162,7 +2164,16 @@ class cpu6502(object):
             self.PC -= 1;
             self.ADD_CYCLE(4);
         
+def import_CPU_class(addition_spec, jit = True):
+    return jitObject(CPU6502, cpu_spec, addition_spec, jit = jit)
 
+def load_CPU(consloe, addition_spec,jit = True):
+    cpu_class, cpu_type = import_CPU_class(addition_spec,jit = jit)
+    cpu = cpu_class(MAPPER = consloe.MAPPER,
+                        memory = consloe.memory,
+                        PPU = consloe.PPU,
+                        ChannelWrite = consloe.APU.ChannelWrite)#, #consloe.APU,)
+    return cpu, cpu_type
 
 if __name__ == '__main__':
     #cpu_ram = Memory()
@@ -2172,8 +2183,8 @@ if __name__ == '__main__':
     #MAPPER_type = nb.deferred_type()
     #MAPPER_type.define(MAPPER.class_type.instance_type)
 
-    cpu_spec.append(('MAPPER',MAPPER_type))
-    cpu6502 = jitclass(cpu6502, cpu_spec)
+    #cpu_spec.append(('MAPPER',MAPPER_type))
+    cpu6502 = jitObject(cpu6502, cpu_spec)
     cpu = cpu6502(MAPPER = MAPPER())
     print(cpu.CpuClock)
     

@@ -34,6 +34,8 @@ from cpu6502_opcodes import init6502
 
 
 
+
+
 from apu import APU
 from joypad import JOYPAD
 #import mappers
@@ -71,6 +73,7 @@ class CONSLOE(MMC, NES):
         self.jit = jit
         self.nesROM = nesROM()
 
+        self.SoundData = []
         
         #self.Mapper = 999
         #self.APU.pAPUinit()
@@ -111,9 +114,9 @@ class CONSLOE(MMC, NES):
 
     def LoadCheatCode(self,filename):
         self.CheatCode = []
-        cheat_file = filename[:-3] + 'txt'
+        cheat_file = '%s.txt' %filename[:-4]
         if os.path.exists(cheat_file):
-            for item in str(bytearray(read_file_to_array(cheat_file))).split('\n'):
+            for item in bytearray(read_file_to_array(cheat_file)).decode('utf8').split('\n'):
                 if '#' in item:
                     self.CheatCode.append(item.split()[1])
             Log_SYS('CheatCode File Found...Loading')
@@ -131,27 +134,9 @@ class CONSLOE(MMC, NES):
     def initMIDI(self):
         pass
 
-    def jitObject(self, classObject, classObject_spec, classObject_type, classObjectAddition={}):
-        if self.jit:
-            try:
-                if not hasattr(classObject,"class_type"):
-                    for key in classObjectAddition:
-                        #Object_type = nb.deferred_type()
-                        #Object_type.define(classObjectAddition[key].class_type.instance_type)
-                        classObject_spec.append((key,classObjectAddition[key]))
-                    #print(classObject_spec)
-                    jitObject = jitclass(classObject, classObject_spec)
-                    #jitObject_type = nb.deferred_type()
-                    classObject_type.define(jitObject.class_type.instance_type)
-
-                    return jitObject
-            except:
-                print(traceback.print_exc())
-            
-        return classObject
         
     def import_MAPPER_class(self):
-        Log_SYS('init MAPPER')
+        Log_SYS('loading MAPPER CLASS')
         C_MAPPER,self.MAPPER_type = self.CreateMapper(self.ROM.Mapper)  #choose correct mapper class without jit
         
         #cart = cartridge(self.ROM, self.memory)
@@ -159,36 +144,28 @@ class CONSLOE(MMC, NES):
         #self.MAPPER_type = 
         print(type(self.MAPPER))
 
-        #return 
-
-    def import_CPU_class(self):
+    def Load_MAPPER(self):
+        pass
+        Log_SYS('init MAPPER')
+    
+        
+            
+    def Load_CPU(self):
         Log_SYS('loading CPU CLASS')
-        from cpu import cpu6502,cpu_spec
+        from cpu import load_CPU
         addition_spec = {
             'PPU': self.PPU_type,
             'MAPPER':self.MAPPER_type
             }
-        self.CPU_type = nb.deferred_type()
-        return self.jitObject(cpu6502, cpu_spec, self.CPU_type, addition_spec)
-        
-            
-    def Load_CPU(self):
-        cpu = self.import_CPU_class()
-        self.CPU = cpu(MAPPER = self.MAPPER,
-                        memory = self.memory,
-                        PPU = self.PPU,
-                        ChannelWrite = self.APU.ChannelWrite)#, #self.APU,)
+        self.CPU, self.CPU_type = load_CPU(self, addition_spec, jit = self.jit)
         Log_SYS('init CPU')
+       
 
-    def import_PPU_class(self):
-        Log_SYS('loading PPU CLASS')
-        from ppu import PPU,ppu_spec
-        self.PPU_type = nb.deferred_type()
-        return self.jitObject(PPU, ppu_spec, self.PPU_type)
         
     def Load_PPU(self):
-        cPPU = self.import_PPU_class()
-        self.PPU = cPPU(self.memory, self.ROM)
+        Log_SYS('loading PPU CLASS')
+        from ppu import load_PPU
+        self.PPU, self.PPU_type = load_PPU(self, jit = self.jit)
         print(self.PPU)
         Log_SYS('init PPU')
         self.PPU.pPPUinit(self.PPU_Running,self.PPU_render,self.PPU_debug)
@@ -204,22 +181,13 @@ class CONSLOE(MMC, NES):
         self.APU = APU(self.memory)
         
         init6502()
-        #PPU = __import__('ppu',fromlist = ['PPU'])
-        
-        #self.FrameBuffer = self.PPU.FrameBuffer
-        
-        
 
         try:
-            
             self.import_MAPPER_class()
-            
             self.Load_PPU()
-            
             self.Load_CPU()
             
             self.CPU.SET_NEW_MAPPER_TRUE()
-            
             self.CPU.MAPPER.reset()
             
             LoadNES = 1
@@ -244,8 +212,7 @@ class CONSLOE(MMC, NES):
 
         #self.PPU.ScrollToggle = 1
         self.PowerON()
-        self.ScreenShow()
-
+        
         
         Log_SYS("The number of CPU is:",str(multiprocessing.cpu_count()))
         Log_SYS('Parent process %s.' % os.getpid())
@@ -263,6 +230,8 @@ class CONSLOE(MMC, NES):
         #if self.PPU_Running and self.PPU_render:
 
         #    blit_thread.start()
+
+        self.ScreenShow()
 
         self.run()
 
@@ -290,7 +259,7 @@ class CONSLOE(MMC, NES):
                 pass
                 #Log_HW('Play Sound')
                 self.APU.updateSounds(self.CPU.Frames)
-
+                self.SaveSounds()
             
             if Flag == self.CPU.FRAME_RENDER:
                 #self.CPU.FrameRender_ZERO()
@@ -312,14 +281,16 @@ class CONSLOE(MMC, NES):
 
                 self.Cheat()
 
-                
             
             #if self.CPU.isMapperWrite:
             #    self.MapperWrite(self.CPU.MapperWriteAddress, self.CPU.MapperWriteData)
-           
-            
-            
 
+    def SaveSounds(self):
+        #self.SoundData.append('%d,%s' %(self.CPU.Frames,','.join(self.APU.Sound[0:0x15]])))
+        with open('sounddata.txt','a') as f:
+            f.write('%d,%s;' %(self.CPU.Frames,','.join([str(i) for i in self.APU.Sound[0:0x15]])))
+            
+        #print()
         
     def Cheat(self):
         if self.CheatCode:
@@ -342,16 +313,6 @@ class CONSLOE(MMC, NES):
             if ((time.time()- start) / 3.00) > 150:break
             time.sleep(5)
         Log_SYS('jitclass compiled...')
-        
-        #while self.CPU.FrameFlag & self.CPU.FrameRender:
-        #    self.blitFrame()
-        #    print time.time()-start
-        #    start = time.time()
-        #print print_now(),'Waiting_compiling  compiled...'
-        
-    
-    
-    
             
     def blitFrame(self):
         if self.PPU_Running:
@@ -438,7 +399,7 @@ class CONSLOE(MMC, NES):
         totalFrame = 0
         while self.Running:
             time.sleep(2)
-            if self.CPU.Frames == nowFrames:break
+            if self.CPU.Frames > 1 and self.CPU.Frames == totalFrame:break
             nowFrames = self.CPU.Frames
             duration = time.time() - start
             #if duration > 4:

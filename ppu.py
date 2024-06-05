@@ -7,10 +7,13 @@ import traceback
 
 import numpy as np
 import numba as nb
-from numba import jit,njit
+#from numba import jit,njit
 from numba.experimental import jitclass
 from numba import uint8,uint16
 
+#自定义类
+from deco import *
+from jitcompile import jitObject
 
 from memory import Memory
 from ppu_reg import PPUREG, PPUBIT
@@ -29,8 +32,8 @@ ROM_class_type = nb.deferred_type()
 ROM_class_type.define(ROM.class_type.instance_type)
         
 
-#print('loading PPU CLASS')      
-'''@jitclass('''
+     
+
 ppu_spec = [('CurrentLine',uint16),
             ('HScroll',uint16),
             ('vScroll',uint16),
@@ -573,21 +576,20 @@ class PPU(object):
         return PatternTable'''
 
 
+def import_PPU_class(jit = True):
+    return jitObject(PPU, ppu_spec, jit = jit)
+
+def load_PPU(consloe, jit = True):
+    ppu_class, ppu_type = import_PPU_class(jit = True)
+    ppu = ppu_class(consloe.memory, consloe.ROM)
+    return ppu, ppu_type
+    
                     
 if __name__ == '__main__':
-    ppu = PPU()
-    #print ppu.Pal
-    #ppu.pPPUinit()
-    #print ppu.blankLine
-    #print len(ppu.vBuffer)
-    #print len(ppu.vBuffer[0])
-    #print ppu.vBuffer[2:4]
-    #print ppu.vBuffer[3]
-    #print ppu.vBuffer[2][1]
-    #cv2.imshow("Main", np.array(ppu.vBuffer,dtype=np.uint8))
-    #print ppu.Read(0x2000)
-    #print byte2bit1(0x0) + byte2bit2(0x28)
-    #aa = PatternTableArr(np.array([0x10,0,0x44,0,0xfe,0,0x82,00,00,0x28,0x44,0x82,00,0x82,0x82,00],dtype=np.uint8))
+    ppu = import_PPU_class()
+    print(ppu)
+    #print(jitObject(PPU, ppu_spec))
+    #print(jitObject(PPU, ppu_spec, jit = False))
 
     
     
