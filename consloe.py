@@ -39,7 +39,7 @@ from cpu6502_opcodes import init6502
 from apu import APU
 from joypad import JOYPAD
 #import mappers
-from mappers.main import cartridge, cartridge_spec
+#from mappers.main import cartridge, cartridge_spec
 
 from vbfun import MemCopy
 
@@ -88,25 +88,6 @@ class CONSLOE(MMC, NES):
     def status(self):
         return "PC:%d,clockticks:%d PPUSTATUS:%d,Frames %d,CurrLine:%d a:%d X:%d Y:%d S:%d p:%d opcode:%d " %self.CPU.status()
 
-    def CreateMapper(self, mapper = 0):
-        Log_SYS("loading MAPPER CLASS %d" %mapper)
-        MAPPER = __import__('mappers.mapper%d' %mapper, fromlist=['MAPPER','mapper_spec'])
-        C_MAPPER = MAPPER.MAPPER
-        mapper_spec = MAPPER.mapper_spec
-        MAPPER_type = nb.deferred_type()
-        if self.jit:
-            try:
-                if not hasattr(C_MAPPER,"class_type"):
-                    cartridge_type = nb.deferred_type()
-                    cartridge_type.define(cartridge.class_type.instance_type)
-                    mapper_spec.append(('cartridge',cartridge_type))
-                    C_MAPPER = jitclass(C_MAPPER, mapper_spec)
-                MAPPER_type.define(C_MAPPER.class_type.instance_type)
-                    
-            except:
-                print(traceback.print_exc())
-            
-        return C_MAPPER, MAPPER_type
 
     def LoadROM(self,filename):
         self.ROM = self.nesROM.LoadROM(filename)
@@ -134,21 +115,21 @@ class CONSLOE(MMC, NES):
     def initMIDI(self):
         pass
 
-        
-    def import_MAPPER_class(self):
-        Log_SYS('loading MAPPER CLASS')
-        C_MAPPER,self.MAPPER_type = self.CreateMapper(self.ROM.Mapper)  #choose correct mapper class without jit
-        
-        #cart = cartridge(self.ROM, self.memory)
-        self.MAPPER = C_MAPPER(cartridge(self.ROM, self.memory))
-        #self.MAPPER_type = 
-        print(type(self.MAPPER))
 
     def Load_MAPPER(self):
-        pass
+        Log_SYS('loading MAPPER CLASS')
+        from mappers.cart import load_MAPPER
+        self.MAPPER, self.MAPPER_type = load_MAPPER(self, jit = self.jit)
         Log_SYS('init MAPPER')
     
         
+    def Load_PPU(self):
+        Log_SYS('loading PPU CLASS')
+        from ppu import load_PPU
+        self.PPU, self.PPU_type = load_PPU(self, jit = self.jit)
+        print(self.PPU)
+        Log_SYS('init PPU')
+        self.PPU.pPPUinit(self.PPU_Running,self.PPU_render,self.PPU_debug)
             
     def Load_CPU(self):
         Log_SYS('loading CPU CLASS')
@@ -160,15 +141,6 @@ class CONSLOE(MMC, NES):
         self.CPU, self.CPU_type = load_CPU(self, addition_spec, jit = self.jit)
         Log_SYS('init CPU')
        
-
-        
-    def Load_PPU(self):
-        Log_SYS('loading PPU CLASS')
-        from ppu import load_PPU
-        self.PPU, self.PPU_type = load_PPU(self, jit = self.jit)
-        print(self.PPU)
-        Log_SYS('init PPU')
-        self.PPU.pPPUinit(self.PPU_Running,self.PPU_render,self.PPU_debug)
 
     
     def StartingUp(self):
@@ -183,7 +155,8 @@ class CONSLOE(MMC, NES):
         init6502()
 
         try:
-            self.import_MAPPER_class()
+            self.Load_MAPPER()
+            
             self.Load_PPU()
             self.Load_CPU()
             

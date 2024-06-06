@@ -2,6 +2,7 @@
 import sys
 
 __all__ = ['main',
+           'cart',
            'mapper0',
            'mapper1',
            'mapper2',
