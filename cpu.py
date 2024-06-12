@@ -20,7 +20,7 @@ from jitcompile import jitObject
 import memory
 from nes import NES
 
-#from mmc import MMC
+from mmc import *
 
 from memory import Memory
 from cpu_reg import CPU_Reg
@@ -29,8 +29,7 @@ from cpu_memory import CPU_Memory
 #from apu import APU#,APU_type
 from ppu import PPU
 from joypad import JOYPAD
-from mappers.main import *
-from mappers.main import CreateMapper
+
 
 
 
@@ -2177,6 +2176,8 @@ def load_CPU(consloe, addition_spec,jit = True):
 
 if __name__ == '__main__':
     #cpu_ram = Memory()
+    from mmc import CreateMapper
+
     MAPPER,MAPPER_type = CreateMapper()
     print(type(MAPPER))
     print(dir(MAPPER))

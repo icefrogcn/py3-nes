@@ -14,8 +14,8 @@ class MAPPER:
     #cartridge: cartridge
     #RenderMethod: uint8
     
-    def __init__(self,cartridge):
-        self.cartridge = cartridge
+    def __init__(self,MMC):
+        self.MMC = MMC
         #self.RenderMethod = 0
         
     @property
@@ -26,23 +26,23 @@ class MAPPER:
         return 0
     
     def reset(self):
-        self.cartridge.SetVROM_8K_Bank(0)
+        self.MMC.SetVROM_8K_Bank(0)
 
-        if self.cartridge.ROM.PROM_16K_SIZE == 1: # 16K only
-            self.cartridge.SetPROM_16K_Bank( 4, 0 )
-            self.cartridge.SetPROM_16K_Bank( 6, 0 )
+        if self.MMC.ROM.PROM_16K_SIZE == 1: # 16K only
+            self.MMC.SetPROM_16K_Bank( 4, 0 )
+            self.MMC.SetPROM_16K_Bank( 6, 0 )
             
-        elif self.cartridge.ROM.PROM_16K_SIZE == 2:	#// 32K
-            self.cartridge.SetPROM_32K_Bank( 0,1,2,3 )
+        elif self.MMC.ROM.PROM_16K_SIZE == 2:	#// 32K
+            self.MMC.SetPROM_32K_Bank( 0,1,2,3 )
         #print "RESET SUCCESS MAPPER ", self.Mapper
 
     def Write(self,address,data):
         pass
     def ReadLow(self,address):#$4100-$7FFF Lower Memory read
-        return self.cartridge.ReadLow(address)
+        return self.MMC.ReadLow(address)
 
     def WriteLow(self,address,data):
-        self.cartridge.WriteLow(address,data)
+        self.MMC.WriteLow(address,data)
 
     def Clock(self, cycle ):
         return False
@@ -56,8 +56,8 @@ class MAPPER:
 
 
 if __name__ == '__main__':
-    from main import cartridge
-    mapper = MAPPER(cartridge())
+    from . import mmc
+    mapper = MAPPER(MMC())
     print(mapper)
 
 

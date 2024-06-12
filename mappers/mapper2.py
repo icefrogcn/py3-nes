@@ -1,4 +1,5 @@
 # -*- coding: UTF-8 -*-
+import sys
 
 from numba import jit
 from numba.experimental import jitclass
@@ -14,8 +15,8 @@ class MAPPER(object):
     #RenderMethod: uint8
 
     
-    def __init__(self,cartridge):
-        self.cartridge = cartridge
+    def __init__(self,MMC):
+        self.MMC = MMC
         
 
     @property
@@ -27,7 +28,7 @@ class MAPPER(object):
         return 2
     
     def reset(self):
-        self.cartridge.SetPROM_32K_Bank(0, 1, self.cartridge.ROM.PROM_8K_SIZE - 2, self.cartridge.ROM.PROM_8K_SIZE - 1)
+        self.MMC.SetPROM_32K_Bank(0, 1, self.MMC.ROM.PROM_8K_SIZE - 2, self.MMC.ROM.PROM_8K_SIZE - 1)
 
         patch = 0
 
@@ -38,19 +39,20 @@ class MAPPER(object):
         return False 
     
     def Write(self,addr,data):#$8000-$FFFF Memory write
-        self.cartridge.SetPROM_16K_Bank(4, data )
+        self.MMC.SetPROM_16K_Bank(4, data )
 
     def ReadLow(self,address):#$4100-$7FFF Lower Memory read
-        return self.cartridge.ReadLow(address)
+        return self.MMC.ReadLow(address)
 
     def WriteLow(self,address,data): #$4100-$7FFF Lower Memory write
-        self.cartridge.WriteLow(address,data)
+        self.MMC.WriteLow(address,data)
 
 
 
 if __name__ == '__main__':
-    from main import cartridge
-    mapper = MAPPER(cartridge())
+    sys.path.append('..')
+    from mmc import MMC
+    mapper = MAPPER(MMC())
     print(mapper)
 
 

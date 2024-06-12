@@ -1,5 +1,7 @@
 # -*- coding: UTF-8 -*-
 
+import sys
+
 from numba import jit
 from numba.experimental import jitclass
 from numba import int8,uint8,int16,uint16,uint32
@@ -12,7 +14,7 @@ MMC3_IRQ_SHOUGIMEIKAN = 2
 MMC3_IRQ_DAI2JISUPER = 3
 
 
-mapper_spec = [#('cartridge',MAIN_class_type),
+mapper_spec = [#('MMC',MAIN_class_type),
         ('reg',uint8[:]),
         ('prg0',uint8), ('prg1',uint8),
         ('chr01',uint8),('chr23',uint8),('chr4',uint8),('chr5',uint8),('chr6',uint8),('chr7',uint8),
@@ -31,8 +33,8 @@ mapper_spec = [#('cartridge',MAIN_class_type),
 class MAPPER(object):
 
 
-    def __init__(self,cartridge):
-        self.cartridge = cartridge
+    def __init__(self,MMC):
+        self.MMC = MMC
 
         self.reg = np.zeros(0x8, np.uint8)
         self.prg0 = self.prg1 = 0
@@ -85,10 +87,10 @@ class MAPPER(object):
         return 1
 
     def WriteLow(self,address,data):
-        self.cartridge.WriteLow(address,data)
+        self.MMC.WriteLow(address,data)
 
     def ReadLow(self,address):
-        return self.cartridge.ReadLow(address)
+        return self.MMC.ReadLow(address)
 
     def Write(self,address,data):#$8000-$FFFF Memory write
         addr = address & 0xE001
@@ -129,13 +131,13 @@ class MAPPER(object):
         elif addr == 0xA000:
             self.reg[2] = data
             if data & 0x01:
-                self.cartridge.Mirroring_W(0)
+                self.MMC.Mirroring_W(0)
             else:
-                self.cartridge.Mirroring_W(1)
-                #elif data == 2:self.cartridge.Mirroring_W(3) #VRAM_MIRROR4L
-                #else:self.cartridge.Mirroring_W(4) #VRAM_MIRROR4H
+                self.MMC.Mirroring_W(1)
+                #elif data == 2:self.MMC.Mirroring_W(3) #VRAM_MIRROR4L
+                #else:self.MMC.Mirroring_W(4) #VRAM_MIRROR4H
                 #print "Mirroring",NES.Mirroring
-                #self.cartridge.MirrorXor_W(((self.cartridge.Mirroring + 1) % 3) * 0x400)
+                #self.MMC.MirrorXor_W(((self.MMC.Mirroring + 1) % 3) * 0x400)
         elif addr == 0xA001:
             self.reg[3] = data
                    
@@ -202,18 +204,18 @@ class MAPPER(object):
 
     def SetBank_CPU(self):
         if( self.reg[0] & 0x40 ):
-            self.cartridge.SetPROM_32K_Bank( self.cartridge.PROM_8K_SIZE-2, self.prg1, self.prg0, self.cartridge.PROM_8K_SIZE-1 );
+            self.MMC.SetPROM_32K_Bank( self.MMC.PROM_8K_SIZE-2, self.prg1, self.prg0, self.MMC.PROM_8K_SIZE-1 );
         else:
-            self.cartridge.SetPROM_32K_Bank( self.prg0, self.prg1, self.cartridge.PROM_8K_SIZE-2, self.cartridge.PROM_8K_SIZE-1 );
+            self.MMC.SetPROM_32K_Bank( self.prg0, self.prg1, self.MMC.PROM_8K_SIZE-2, self.MMC.PROM_8K_SIZE-1 );
     
 
     def SetBank_PPU(self):
-        if( self.cartridge.VROM_1K_SIZE ):
+        if( self.MMC.VROM_1K_SIZE ):
             if( self.reg[0] & 0x80 ):
-                self.cartridge.SetVROM_8K_Bank8( self.chr4, self.chr5, self.chr6, self.chr7,
+                self.MMC.SetVROM_8K_Bank8( self.chr4, self.chr5, self.chr6, self.chr7,
                                                  self.chr01, self.chr01+1, self.chr23, self.chr23+1 )
             else:
-                self.cartridge.SetVROM_8K_Bank8( self.chr01, self.chr01+1, self.chr23, self.chr23+1,
+                self.MMC.SetVROM_8K_Bank8( self.chr01, self.chr01+1, self.chr23, self.chr23+1,
                                                  self.chr4, self.chr5, self.chr6, self.chr7 );
             
 
@@ -222,8 +224,9 @@ class MAPPER(object):
 
 
 if __name__ == '__main__':
-    from main import cartridge
-    mapper = MAPPER(cartridge())
+    sys.path.append('..')
+    from mmc import MMC
+    mapper = MAPPER(MMC())
     print(mapper)
 
 

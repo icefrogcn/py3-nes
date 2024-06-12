@@ -45,14 +45,14 @@ from vbfun import MemCopy
 
 from nes import NES
 
-from mmc import MMC
+#from mmc import MMC
 
 
 
 
 
 
-class CONSLOE(MMC, NES):       
+class CONSLOE(NES):       
     #EmphVal =0
 
     romName =''
@@ -118,7 +118,7 @@ class CONSLOE(MMC, NES):
 
     def Load_MAPPER(self):
         Log_SYS('loading MAPPER CLASS')
-        from mappers.cart import load_MAPPER
+        from mmc import load_MAPPER
         self.MAPPER, self.MAPPER_type = load_MAPPER(self, jit = self.jit)
         Log_SYS('init MAPPER')
     
