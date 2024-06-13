@@ -1,4 +1,4 @@
-# py-nes
+# py3-nes
 NES(FC) Emulator in Python 3.12 + jitclass
 
 #features
