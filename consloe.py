@@ -232,7 +232,7 @@ class CONSLOE(NES):
                 pass
                 #Log_HW('Play Sound')
                 self.APU.updateSounds(self.CPU.Frames)
-                self.SaveSounds()
+                #self.SaveSounds()
             
             if Flag == self.CPU.FRAME_RENDER:
                 #self.CPU.FrameRender_ZERO()
@@ -254,9 +254,6 @@ class CONSLOE(NES):
 
                 self.Cheat()
 
-            
-            #if self.CPU.isMapperWrite:
-            #    self.MapperWrite(self.CPU.MapperWriteAddress, self.CPU.MapperWriteData)
 
     def SaveSounds(self):
         #self.SoundData.append('%d,%s' %(self.CPU.Frames,','.join(self.APU.Sound[0:0x15]])))
@@ -386,210 +383,7 @@ class CONSLOE(NES):
             
             totalFrame = nowFrames
         
-    #@deco
-    def MaskVROM(self, page, mask):
-        return page & (mask - 1)
 
-
-    def Select8KVROM(self, val1):
-        #val1 = self.MaskVROM(val1, NES.VROM_8K_SIZE)
-        #self.cpu6502.PPU.VRAM[0:0x2000] = MMC.Select8KVROM(self, val1, self.ROM.VROM)
-        self.PPU.VRAM[0:0x2000] = self.nesROM.VROM[val1 * 0x2000 : val1 * 0x2000 + 0x2000]
-        #BankSwitch 0, val1 * 8, 8
-
-    def Select4KVROM(self, val1, bank):
-        val1 = self.MaskVROM(val1, self.nesROM.ChrCount * 2)
-        self.PPU.VRAM[bank * 4 * 0x400: (bank + 1) * 4 * 0x400] = self.nesROM.VROM[val1 * 4 * 0x400 : val1 * 4 * 0x400 + 4 * 0x400]
-        #BankSwitch bank * 4, val1 * 4, 4
-
-    def Select2KVROM(self, val1, bank):
-        val1 = self.MaskVROM(val1, self.nesROM.ChrCount * 4)
-        self.PPU.VRAM[bank * 2 * 0x400: (bank + 1) * 2 * 0x400] = self.nesROM.VROM[val1 * 2 * 0x400 : val1 * 2 * 0x400 + 2 * 0x400]
-        #BankSwitch bank * 2, val1 * 2, 2
-
-
-    def Select1KVROM(self, val1, bank):
-        val1 = self.MaskVROM(val1, self.nesROM.ChrCount * 8)
-        if NES.Mapper == 4:
-            MemCopy(self.PPU.VRAM, (MMC.MMC3_ChrAddr ^ (bank * 0x400)), self.nesROM.VROM, (val1 * 0x400), 0x400)
-            
-        elif NES.Mapper == 23:
-            pass
-            #MemCopy VRAM(bank * &H400&), VROM(val1 * &H400&), &H400&
-        else:
-            pass
-            self.PPU.VRAM[bank * 0x400: (bank + 1) * 0x400] = self.nesROM.VROM[val1 * 0x400 : val1 * 0x400 + 0x400]
-
-
-    #'only switches banks when needed
-    #'******只有需要时才切换******
-    def SetupBanks(self):
-
-        self.reg8 = MaskBankAddress(self.reg8,self.nesROM.PrgCount)
-        self.regA = MaskBankAddress(self.regA,self.nesROM.PrgCount)
-        self.regC = MaskBankAddress(self.regC,self.nesROM.PrgCount)
-        self.regE = MaskBankAddress(self.regE,self.nesROM.PrgCount)
-        
-        '''
-        self.cpu6502.bank8 = np.array(self.PRGROM[self.reg8 * 0x2000: self.reg8 * 0x2000 + 0x2000], np.uint8)
-        self.cpu6502.bankA = np.array(self.PRGROM[self.regA * 0x2000: self.regA * 0x2000 + 0x2000], np.uint8)
-        self.cpu6502.bankC = np.array(self.PRGROM[self.regC * 0x2000: self.regC * 0x2000 + 0x2000], np.uint8)
-        self.cpu6502.bankE = np.array(self.PRGROM[self.regE * 0x2000: self.regE * 0x2000 + 0x2000], np.uint8)
-        '''
-
-        MemCopy(self.RAM[4], 0, self.nesROM.PROM, self.reg8 * 0x2000, 0x2000)
-        MemCopy(self.RAM[5], 0, self.nesROM.PROM, self.regA * 0x2000, 0x2000)
-        MemCopy(self.RAM[6], 0, self.nesROM.PROM, self.regC * 0x2000, 0x2000)
-        MemCopy(self.RAM[7], 0, self.nesROM.PROM, self.regE * 0x2000, 0x2000)
-        #print len(self.CPU.bankE)
-
-    
-    
-    #@deco
-    def MaskBankAddress(self,bank):
-        if bank >= self.nesROM.PrgCount * 2 :
-            i = 0xFF
-            while (bank & i) >= self.nesROM.PrgCount * 2:
-                i = i // 2
-            
-            MaskBankAddress = (bank & i)
-        else:
-            MaskBankAddress = bank
-        return MaskBankAddress
-
-    def SetPROM_8K_Bank(self, page, bank ):
-        pass
-	#'''bank %= NES.PROM_8K_SIZE;
-	#CPU_MEM_BANK[page] = PROM+0x2000*bank;
-	#CPU_MEM_TYPE[page] = BANKTYPE_ROM;
-	#CPU_MEM_PAGE[page] = bank;'''
-
-
-    def MMC3_Sync(self):
-        if MMC.swap:
-            self.reg8 = 0xFE
-            self.regA = MMC.PrgSwitch2
-            self.regC = MMC.PrgSwitch1
-            self.regE = 0xFF
-        else:
-            self.reg8 = MMC.PrgSwitch1
-            self.regA = MMC.PrgSwitch2
-            self.regC = 0xFE
-            self.regE = 0xFF
-        
-        self.SetupBanks()
-
-    def MMC3Write(self,value, Address):
-        if Address == 0x8000:
-                MMC.MMC3_Command = value & 0x7
-                MMC.MMC3_ChrAddr == 0x1000 if value & 0x80 else  0
-                MMC.swap = 1 if value & 0x40 else 0
-                
-        elif Address == 0x8001:
-            if MMC.MMC3_Command == 0:
-                self.Select1KVROM( value, 0)
-                self.Select1KVROM( value + 1, 1)
-            elif MMC.MMC3_Command == 1:
-                self.Select1KVROM( value, 2)
-                self.Select1KVROM( value + 1, 3)
-            elif MMC.MMC3_Command == 2:
-                self.Select1KVROM( value, 4)
-            elif MMC.MMC3_Command == 3:
-                self.Select1KVROM( value, 5)
-            elif MMC.MMC3_Command == 4:
-                self.Select1KVROM( value, 6)
-            elif MMC.MMC3_Command == 5:
-                self.Select1KVROM( value, 7)
-            elif MMC.MMC3_Command == 6:
-                MMC.PrgSwitch1 = value
-                self.MMC3_Sync()
-            elif MMC.MMC3_Command == 7:
-                MMC.PrgSwitch2 = value
-                self.MMC3_Sync()
-                
-        elif Address == 0xA000:
-            NES.Mirroring = 0 if value & 1 else 1
-            NES.MirrorXor = ((NES.Mirroring + 1) % 3) * 0x400
-
-        elif Address == 0xA001:
-            NES.UsesSRAM = True if value else False
-        elif Address == 0xC000:
-            MMC.MMC3_IrqVal = value
-        elif Address == 0xC001:
-            MMC.MMC3_TmpVal = value
-        elif Address == 0xE000:
-            MMC.irq_enable = False
-            MMC.MMC3_IrqVal = MMC.MMC3_TmpVal
-        elif Address == 0xE001:
-            MMC.irq_enable = True
-
-
-    def map1_write(self, Address  , value ):
-
-        bank_select = 0 #int16
-
-        if (value & 0x80) :
-            self.data[0] = self.data[0] | 0xC
-            self.accumulator = self.data[(Address // 0x2000) & 3]
-            self.sequence = 5
-        else:
-            if value & 1 : self.accumulator = self.accumulator | (2 ** sequence)
-            self.sequence = self.sequence + 1
-        
-
-        if (self.sequence == 5) :
-            self.data[(Address // 0x2000) & 3] = self.accumulator
-            self.sequence = 0
-            self.accumulator = 0
-
-            #'MirrorXor = pow2((data(0) And &H3) + 10)
-            
-            if (self.nesROM.PrgCount == 0x20) :# '/* 512k cart */'
-                bank_select = (self.data[1] & 0x10) * 2
-            else:# '/* other carts */'
-                bank_select = 0
-           
-            
-            if self.data[0] & 2 :# 'enable panning
-                NES.Mirroring = (self.data[0] & 1) ^ 1
-            else:# 'disable panning
-                NES.Mirroring = 2
-            
-            #DoMirror
-            #Select Case Mirroring
-            #Case 0
-            #    MirrorXor = &H400
-            #Case 1
-            #    MirrorXor = &H800
-            #Case 2
-            #    MirrorXor = 0
-            #End Select
-            
-            if (self.data[0] & 8) == 0 :# 'base boot select $8000?
-                self.reg8 = 4 * (self.data[3]& 15) + bank_select
-                self.regA = 4 * (self.data[3]& 15) + bank_select + 1
-                self.regC = 4 * (self.data[3]& 15) + bank_select + 2
-                self.regE = 4 * (self.data[3]& 15) + bank_select + 3
-                self.SetupBanks()
-            elif (self.data[0]& 4) :# '16k banks
-                self.reg8 = ((self.data[3]& 15) * 2) + bank_select
-                self.regA = ((self.data[3]& 15) * 2) + bank_select + 1
-                self.regC = 0xFE
-                self.regE = 0xFF
-                self.SetupBanks()
-            else: #'32k banks
-                self.reg8 = 0
-                self.regA = 1
-                self.regC = ((self.data[3] & 15) * 2) + bank_select
-                self.regE = ((self.data[3] & 15) * 2) + bank_select + 1
-                self.SetupBanks()
-            
-            
-            if (self.data[0]& 0x10) :# '4k
-                self.Select4KVROM(self.data[1], 0)
-                self.Select4KVROM(self.data[2], 1)
-            else:# '8k
-                self.Select8KVROM(self.data[1] // 2)
             
 
 
