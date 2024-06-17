@@ -11,7 +11,7 @@ import numpy as np
 mapper_spec = []
 #@jitclass
 class MAPPER:
-    #cartridge: cartridge
+    #MMC: MMC
     #RenderMethod: uint8
     
     def __init__(self,MMC):

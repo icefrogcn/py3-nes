@@ -165,8 +165,11 @@ class MAPPER(object):
 
 if __name__ == '__main__':
     sys.path.append('..')
-    from mmc import MMC
-    mapper = MAPPER(MMC())
+    from mmc import MMC,MMC_spec
+    from jitcompile import jitObject
+    mapper_class, mapper_type = jitObject(MAPPER, mapper_spec,MMC_spec(), jit = True)
+
+    mapper = mapper_class(MMC())
     print(mapper)
 
 

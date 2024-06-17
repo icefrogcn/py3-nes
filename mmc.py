@@ -220,15 +220,18 @@ class MMC(object):
         self.VRAM[page*0x400:page*0x400 + 0x400] = self.VROM[0x0400*bank:0x0400*bank + 0x400]
 
 
-
-def import_MAPPER(mapper = 0, jit = True):
-    mapper_mod = __import__('mappers.mapper%d' %mapper, fromlist=['MAPPER','mapper_spec'])
+def MMC_spec():
     MMC_type = nb.deferred_type()
     MMC_type.define(MMC.class_type.instance_type)
     addition_spec = {
             'MMC': MMC_type,
             }
-    return jitObject(mapper_mod.MAPPER, mapper_mod.mapper_spec, addition_spec, jit = jit) 
+    return addition_spec
+
+def import_MAPPER(mapper = 0, jit = True):
+    mapper_mod = __import__('mappers.mapper%d' %mapper, fromlist=['MAPPER','mapper_spec'])
+
+    return jitObject(mapper_mod.MAPPER, mapper_mod.mapper_spec, MMC_spec(), jit = jit) 
 
 def load_MAPPER(consloe, jit = True):
     mapper_class, mapper_type = import_MAPPER(mapper = consloe.ROM.Mapper, jit = jit)
