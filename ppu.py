@@ -31,7 +31,8 @@ PPU_Reg_type.define(PPUREG.class_type.instance_type)
 ROM_class_type = nb.deferred_type()
 ROM_class_type.define(ROM.class_type.instance_type)
         
-
+lookup_l = np.array([[(i & (1 << b))>>b for b in np.arange(7,-1,-1)] for i in np.arange(256)], np.uint8)
+lookup_h = np.array([[(i & (1 << b))>>b<<1 for b in np.arange(7,-1,-1)] for i in np.arange(256)], np.uint8)
      
 
 ppu_spec = [('CurrentLine',uint16),
@@ -42,8 +43,11 @@ ppu_spec = [('CurrentLine',uint16),
            ('reg',PPU_Reg_type),
            ('memory',PPU_Memory_type),
            ('ROM',ROM_class_type),
+           #('lookup_l',uint8[:,:]),
+           #('lookup_h',uint8[:,:]),
            ('PatternTableTiles',uint8[:,:,:]),
            ('Pal',uint8[:,:]), 
+           ('ScreenArray',uint8[:,:]),
            ('FrameArray',uint8[:,:]),
            ('FrameNT0',uint8[:,:]),
            ('FrameNT1',uint8[:,:]),
@@ -92,10 +96,14 @@ class PPU(object):
         self.ROM = ROM
         self.memory = PPU_Memory(memory)
         self.reg = PPUREG(self.memory, self.ROM)
+        
 
+
+    
         self.PatternTableTiles = np.zeros((0x2000 >> 4, 8, 8),np.uint8)
         self.Pal        = pal
 
+        self.ScreenArray = np.zeros((240, 256),np.uint8)
         self.FrameArray = np.zeros((720, 768),np.uint8)
         self.FrameNT0 = self.FrameArray[0:240,0:256]
         self.FrameNT1 = self.FrameArray[0:240,256:512]
@@ -395,8 +403,9 @@ class PPU(object):
         bitarr = range(0x7,-1,-1)
         for TileIndex in range(len(PatternTable)):
             for TileY in range(8):
-                PatternTable[TileIndex,TileY] = np.array([1 if (Pattern_Tables[(TileIndex << 4) + TileY]) & (2**bit) else 0 for bit in bitarr], np.uint8) + \
-                                                np.array([2 if (Pattern_Tables[(TileIndex << 4) + TileY + 8]) & (2**bit) else 0 for bit in bitarr], np.uint8)
+                PatternTable[TileIndex,TileY] = lookup_l[Pattern_Tables[(TileIndex << 4) + TileY]] + lookup_h[Pattern_Tables[(TileIndex << 4) + TileY + 8]]
+#                PatternTable[TileIndex,TileY] = np.array([1 if (Pattern_Tables[(TileIndex << 4) + TileY]) & (2**bit) else 0 for bit in bitarr], np.uint8) + \
+#                                                np.array([2 if (Pattern_Tables[(TileIndex << 4) + TileY + 8]) & (2**bit) else 0 for bit in bitarr], np.uint8)
 
         return PatternTable
 
@@ -586,8 +595,14 @@ def load_PPU(consloe, jit = True):
     
                     
 if __name__ == '__main__':
-    ppu = import_PPU_class()
-    print(ppu)
+    pass
+    pt_l = np.array([[int(b) for b in (bin(i))[2:].rjust(8,'0')] for i in range(256)], np.uint8)
+    pt_h = np.array([[int(b)<<1 for b in (bin(i))[2:].rjust(8,'0')] for i in range(256)], np.uint8)
+
+    print(pt_l)
+    print(pt_h)
+    #ppu = import_PPU_class()
+    #print(ppu)
     #print(jitObject(PPU, ppu_spec))
     #print(jitObject(PPU, ppu_spec, jit = False))
 

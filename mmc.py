@@ -14,8 +14,6 @@ from numba import int8,uint8,int16,uint16
 import numpy as np
 import numba as nb
 
-#sys.path.append("..")
-#sys.path.append("mappers")
 
 from jitcompile import jitObject
 

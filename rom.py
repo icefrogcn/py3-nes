@@ -81,6 +81,7 @@ class ROM(object):
         return self.info[2]
     def Mirroring_W(self,value):
         self.info[2] = value
+        self.info[5] = ((value + 1) % 3) * 0x400
 
     @property
     def FourScreen(self):
@@ -97,8 +98,8 @@ class ROM(object):
     @property
     def MirrorXor(self):
         return self.info[5]
-    def MirrorXor_W(self,value):
-        self.info[5] = value
+    #def MirrorXor_W(self,value):
+    #    self.info[5] = value
 
     @property
     def PROM_8K_SIZE(self):
@@ -220,7 +221,7 @@ class nesROM(NES):
         self.ROM.FourScreen_W(self.FourScreen)
         self.ROM.UsesSRAM_W(self.UsesSRAM)
 
-        self.ROM.MirrorXor_W(self.MirrorXor)
+        #self.ROM.MirrorXor_W(self.MirrorXor)
 
 
         self.ROM.PROM_16K_SIZE = self.PROM_16K_SIZE

@@ -19,6 +19,7 @@ from rom import ROM#,ROM_class_type
 
 PPU_BGTBL_BIT = 0x10
 PPU_SPTBL_BIT = 0x08
+PPU_NAMETBL_BIT = 0x03
 
 @jitclass#([('ver',uint8)])
 class PPUBIT(object):
@@ -189,7 +190,7 @@ class PPUREG(object):
         
     @property
     def PPU_NAMETBL_BIT(self):
-        return self.PPUCTRL & self.bit.PPU_NAMETBL_BIT
+        return self.PPUCTRL & PPU_NAMETBL_BIT
         
     @property       #2001
     def PPUMASK(self):

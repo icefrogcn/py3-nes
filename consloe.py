@@ -343,8 +343,7 @@ class CONSLOE(NES):
         del self.MAPPER
             
     def blitScreen(self):
-        self.FrameBuffer = paintBuffer(self.PPU.FrameArray[self.PPU.scY:self.PPU.scY + 240,self.PPU.scX:self.PPU.scX+256],self.PPU.Pal,self.PPU.Palettes)
-        cv2.imshow("Main", self.FrameBuffer)
+        cv2.imshow("Main", paintBuffer(self.PPU.ScreenArray,self.PPU.Pal,self.PPU.Palettes))
         cv2.waitKey(1)
 
     def blitPal(self):
@@ -421,17 +420,6 @@ def JOYPAD_CHK(CPU):
         return 1
     
 
-@njit
-def MaskBankAddress(bank, PrgCount):
-        if bank >= PrgCount * 2 :
-            i = 0xFF
-            while (bank & i) >= PrgCount * 2:
-                i = i // 2
-            
-            MaskBankAddress = (bank & i)
-        else:
-            MaskBankAddress = bank
-        return MaskBankAddress
 @njit
 def paintBuffer(FrameBuffer,Pal,Palettes):
     [rows, cols] = FrameBuffer.shape
