@@ -80,7 +80,7 @@ class MAPPER(object):
                 elif data == 2:self.MMC.Mirroring_W(3) #VRAM_MIRROR4L
                 else:self.MMC.Mirroring_W(4) #VRAM_MIRROR4H
                 #print "Mirroring",NES.Mirroring
-                self.MMC.MirrorXor_W(((self.MMC.Mirroring + 1) % 3) * 0x400)
+                #self.MMC.MirrorXor_W(((self.MMC.Mirroring + 1) % 3) * 0x400)
                 
         elif addr == 0x9008:
             self.reg[8] = data & 0x02
