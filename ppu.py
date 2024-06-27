@@ -33,7 +33,10 @@ ROM_class_type.define(ROM.class_type.instance_type)
         
 lookup_l = np.array([[(i & (1 << b))>>b for b in np.arange(7,-1,-1)] for i in np.arange(256)], np.uint8)
 lookup_h = np.array([[(i & (1 << b))>>b<<1 for b in np.arange(7,-1,-1)] for i in np.arange(256)], np.uint8)
+
+lookup_PT = np.array([[((i>>8 & 1<<b)>>b<<1) + ((i & 1<<b)>>b) for b in range(0x8)][::-1] for i in range(0x10000)], np.uint8)
      
+
 
 ppu_spec = [('CurrentLine',uint16),
             ('HScroll',uint16),
@@ -403,7 +406,8 @@ class PPU(object):
         bitarr = range(0x7,-1,-1)
         for TileIndex in range(len(PatternTable)):
             for TileY in range(8):
-                PatternTable[TileIndex,TileY] = lookup_l[Pattern_Tables[(TileIndex << 4) + TileY]] + lookup_h[Pattern_Tables[(TileIndex << 4) + TileY + 8]]
+                #PatternTable[TileIndex,TileY] = lookup_l[Pattern_Tables[(TileIndex << 4) + TileY]] + lookup_h[Pattern_Tables[(TileIndex << 4) + TileY + 8]]
+                PatternTable[TileIndex,TileY] = lookup_PT[Pattern_Tables[(TileIndex << 4) + TileY] + (Pattern_Tables[(TileIndex << 4) + TileY + 8]<<8)]
 #                PatternTable[TileIndex,TileY] = np.array([1 if (Pattern_Tables[(TileIndex << 4) + TileY]) & (2**bit) else 0 for bit in bitarr], np.uint8) + \
 #                                                np.array([2 if (Pattern_Tables[(TileIndex << 4) + TileY + 8]) & (2**bit) else 0 for bit in bitarr], np.uint8)
 
@@ -596,11 +600,14 @@ def load_PPU(consloe, jit = True):
                     
 if __name__ == '__main__':
     pass
-    pt_l = np.array([[int(b) for b in (bin(i))[2:].rjust(8,'0')] for i in range(256)], np.uint8)
-    pt_h = np.array([[int(b)<<1 for b in (bin(i))[2:].rjust(8,'0')] for i in range(256)], np.uint8)
+    pt_l = np.array([[int(b) for b in (bin(i))[2:].rjust(8,'0')] for i in range(0x100)], np.uint8)
+    pt_h = np.array([[int(b)<<1 for b in (bin(i))[2:].rjust(8,'0')] for i in range(0x100)], np.uint8)
+
+    py_full = np.array([[((i>>8 & 1<<b)>>b<<1) + ((i & 1<<b)>>b) for b in range(0x8)][::-1] for i in range(0x10000)], np.uint8)
 
     print(pt_l)
     print(pt_h)
+    print(py_full)
     #ppu = import_PPU_class()
     #print(ppu)
     #print(jitObject(PPU, ppu_spec))

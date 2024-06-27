@@ -200,10 +200,12 @@ class PPUREG(object):
         
     @property
     def PPUSTATUS(self):        #2002
-        #ret = self.reg[2]
-        ret = (self.PPU7_Temp & 0x1F) | self.reg[2]
-        if ret & 0x80:
-            self.reg[2] &= 0x60 #PPU_SPHIT_FLAG + PPU_SPMAX_FLAG
+        ret = self.reg[2]
+        #ret = (self.PPU7_Temp & 0x1F) | self.reg[2]
+        self.reg[9] = 1
+        #if ret & 0x80:
+        #    self.reg[2] &= 0x60 #PPU_SPHIT_FLAG + PPU_SPMAX_FLAG
+        self.reg[2] &= ~self.bit.PPU_VBLANK_FLAG
         return ret
         
     def PPUSTATUS_W(self,value):

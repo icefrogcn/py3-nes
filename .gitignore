@@ -5,6 +5,8 @@ __pycache__/
 *.pyc
 *.nes
 
+.vs
+
 # C extensions
 *.so
 
