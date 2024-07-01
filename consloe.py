@@ -43,16 +43,9 @@ from joypad import JOYPAD
 
 from vbfun import MemCopy
 
-from nes import NES
-
-#from mmc import MMC
 
 
-
-
-
-
-class CONSLOE(NES):       
+class CONSLOE():       
     #EmphVal =0
 
     romName =''
@@ -106,7 +99,7 @@ class CONSLOE(NES):
         
             
     def PowerON(self):
-        NES.CPURunning = True
+        self.CPURunning = True
 
     def PowerOFF(self):
         self.ShutDown()
@@ -126,7 +119,7 @@ class CONSLOE(NES):
     def Load_PPU(self):
         Log_SYS('loading PPU CLASS')
         from ppu import load_PPU
-        self.PPU, self.PPU_type = load_PPU(self, jit = self.jit)
+        self.PPU, self.PPU_type = load_PPU(self, jit = True)
         print(self.PPU)
         Log_SYS('init PPU')
         self.PPU.pPPUinit(self.PPU_Running,self.PPU_render,self.PPU_debug)
@@ -146,7 +139,7 @@ class CONSLOE(NES):
     def StartingUp(self):
         Log_SYS('RESET')
         self.memory.RAM[::] = 0
-        self.memory.VRAM[:] = 0
+        self.memory.VRAM[::] = 0
         self.memory.SpriteRAM[:] = 0
         
         Log_SYS('init APU')
@@ -161,6 +154,7 @@ class CONSLOE(NES):
             self.Load_CPU()
             
             self.CPU.SET_NEW_MAPPER_TRUE()
+            self.CPU.MAPPER.MMC.reset()
             self.CPU.MAPPER.reset()
             
             LoadNES = 1
@@ -222,7 +216,7 @@ class CONSLOE(NES):
         wish_fps = 60
         start = time.time()
         exec_cycles = 0
-        forceblit = 0
+        forceblit = 1
         while self.Running:
             #t = threading.Thread(target = self.CPU.exec6502)
             #t.start()
@@ -280,7 +274,7 @@ class CONSLOE(NES):
             Log_SYS('jitclass is compiling...%f %% %d' %((time.time()- start) / 1.20 , self.CPU.clockticks6502))
             #print '6502:',self.status
             if self.CPU.clockticks6502 > 0:break
-            if ((time.time()- start) / 3.00) > 150:break
+            if ((time.time()- start) / 1.20) > 150:break
             time.sleep(5)
         Log_SYS('jitclass compiled...')
             
@@ -488,10 +482,27 @@ def run(debug = False, jit = True):
 
 if __name__ == '__main__':
 
-    run(debug = True)
-    #run(debug = True, jit = False)
-    #run()
+    #run(debug = True)
+    ROMS = roms_list()
+    ROMS_INFO = get_roms_mapper(ROMS)
+    fc = CONSLOE(True,jit = True)
 
+    while True:
+        show_choose(ROMS_INFO)
+        gn = input("choose a number: ")
+        print (gn)
+        if gn == 999:
+            break
+        if not int(gn) <= len(ROMS):
+            continue
+        #fc.debug = True
+        fc.LoadROM(ROMS_DIR + ROMS[int(gn)])
+        fc.LoadCheatCode(ROMS_DIR + ROMS[int(gn)])
+        print (fc.CheatCode)
+        fc.PPU_Running = 1
+        fc.PPU_render = 1
+        fc.PPU_debug = True
+        fc.StartingUp()
         
 
 

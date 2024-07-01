@@ -27,20 +27,18 @@ PRE_RENDER      = 3
 TILE_RENDER     = 4
 
 
-__all__ = [#'MAPPER',
-           'POST_ALL_RENDER',
-           'PRE_ALL_RENDER',
-           'POST_RENDER',
-           'PRE_RENDER',
-           'TILE_RENDER'
-           ]
-#MAPPER
+
+VRAM_HMIRROR	= 0x00	# Horizontal
+VRAM_VMIRROR	= 0x01	# Virtical
+VRAM_MIRROR4	= 0x02	# All screen
+VRAM_MIRROR4L	= 0x03	# PA10 L屌掕 $2000-$23FF偺儈儔乕
+VRAM_MIRROR4H	= 0x04	# PA10 H屌掕 $2400-$27FF偺儈儔乕
 
 MMC_spec = [('ROM',ROM), \
            ('PROM_SIZE_array',uint8[:]), \
            ('VROM_SIZE_array',uint8[:]), \
            ('PRGRAM',uint8[:,:]), \
-           ('VRAM',uint8[:]), \
+           ('VRAM',uint8[:,:]), \
            ('PROM',uint8[:]), \
            ('VROM',uint8[:]), \
            ('RenderMethod',uint8)
@@ -56,7 +54,7 @@ class MMC(object):
     PROM_SIZE_array: uint8[:]
     VROM_SIZE_array: uint8[:]
     PRGRAM: uint8[:,:]
-    VRAM: uint8[:]
+    VRAM: uint8[:,:]
     PROM: uint8[:]
     VROM: uint8[:]
     RenderMethod: uint8
@@ -116,8 +114,12 @@ class MMC(object):
         self.ROM.Mirroring_W(value)  
         
     def reset(self):
-        pass
-        
+        if self.ROM.Is4SCREEN():
+            self.SetVRAM_Mirror( 2 )
+        elif self.ROM.IsVMIRROR():
+            self.SetVRAM_Mirror( 1 )
+        else:
+            self.SetVRAM_Mirror( 0 )
 
     def Write(self,addr,data):#$8000-$FFFF Memory write
         pass
@@ -177,13 +179,37 @@ class MMC(object):
         bank &= 0x1F
         #CRAM = 0x8000 + 0x0400 * bank
         CRAM = 0x0400 * (bank & 0x7)
-        self.VRAM[page*0x400:page*0x400 + 0x400] = self.PRGRAM[(bank & 0x18 >> 3) + 4][CRAM:CRAM + 0x400]
+        self.VRAM[page] = self.PRGRAM[(bank & 0x18 >> 3) + 4][CRAM:CRAM + 0x400]
 
     def SetVRAM_1K_Bank(self, page, bank):
         #print "Set VRAM"
         bank &= 0x3
         VRAM = 0x0400 * bank + 4096
-        self.VRAM[page*0x400:page*0x400 + 0x400] = self.VRAM[VRAM:VRAM + 0x400]
+        self.VRAM[page] = self.VRAM[bank]
+
+
+    def SetVRAM_Bank(self, bank0, bank1, bank2, bank3 ):
+
+        self.SetVRAM_1K_Bank(  8, bank0 )
+        self.SetVRAM_1K_Bank(  9, bank1 )
+        self.SetVRAM_1K_Bank( 10, bank2 )
+        self.SetVRAM_1K_Bank( 11, bank3 )
+
+    def SetVRAM_Mirror(self, Mirror ):
+        if Mirror == VRAM_HMIRROR:
+            self.SetVRAM_Bank( 0, 0, 1, 1 )
+			
+        elif Mirror == VRAM_VMIRROR:
+            self.SetVRAM_Bank( 0, 1, 0, 1 )
+			
+        elif Mirror == VRAM_MIRROR4L:
+            self.SetVRAM_Bank( 0, 0, 0, 0 )
+			
+        elif Mirror == VRAM_MIRROR4H:
+            self.SetVRAM_Bank( 1, 1, 1, 1 )
+			
+        elif Mirror == VRAM_MIRROR4:
+            self.SetVRAM_Bank( 0, 1, 2, 3 )
 
     def SetVROM_8K_Bank(self,bank):
         for i in range(8):
@@ -215,7 +241,8 @@ class MMC(object):
     def SetVROM_1K_Bank(self, page, bank):
         #print (bank,self.ROM.VROM_1K_SIZE)
         bank %= self.ROM.VROM_1K_SIZE
-        self.VRAM[page*0x400:page*0x400 + 0x400] = self.VROM[0x0400*bank:0x0400*bank + 0x400]
+        #self.VRAM[page*0x400:page*0x400 + 0x400] = self.VROM[0x0400*bank:0x0400*bank + 0x400]
+        self.VRAM[page] = self.VROM[0x0400*bank:0x0400*bank + 0x400]
 
 
 def MMC_spec():

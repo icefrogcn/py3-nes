@@ -24,7 +24,7 @@ from memory import Memory#,memory_type
 class PPU_Memory(object):
     memory:Memory
     PRGRAM:uint8[:,:]
-    VRAM:uint8[:]
+    VRAM:uint8[:,:]
     SpriteRAM:uint8[:]
     Palettes:uint8[:]
 
@@ -34,7 +34,8 @@ class PPU_Memory(object):
         self.PRGRAM     = self.memory.RAM
         self.VRAM       = self.memory.VRAM
         self.SpriteRAM  = self.memory.SpriteRAM
-        self.Palettes   = self.VRAM[0x3F00:0x3F20]#np.zeros(0x20, np.uint8) 
+        #self.Palettes   = self.VRAM[0x3F00:0x3F20]#np.zeros(0x20, np.uint8) 
+        self.Palettes   = np.zeros(0x20, np.uint8) 
         
         
         
@@ -42,7 +43,7 @@ class PPU_Memory(object):
     #@property
     #def VRAM(self):
     #    return self.memory.VRAM
-    
+    '''
     def read(self,address):
         addr = address & 0x3FFF
         data = 0
@@ -58,7 +59,7 @@ class PPU_Memory(object):
         else:
             return self.VRAM[addr]
         return data
-        
+        '''
 
                     
 if __name__ == '__main__':

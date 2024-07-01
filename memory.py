@@ -13,17 +13,18 @@ from numba import types
            ])'''
 @jitclass
 class Memory(object):
-    VRAM:uint8[:] 
+    VRAM:uint8[:,:] 
     SpriteRAM:uint8[:]
     RAM:uint8[:,:]
     
     def __init__(self):
-        self.VRAM = np.zeros(0x4000,np.uint8)
+        self.VRAM = np.zeros((12,0x1000),np.uint8)
+        #self.VRAM = np.zeros(0x4000,np.uint8)
         self.SpriteRAM = np.zeros(0x100,np.uint8)
         self.RAM = np.zeros((8,0x2000), np.uint8)
 
     def reset(self):
-        self.VRAM = np.zeros(0x4000,np.uint8)
+        self.VRAM = np.zeros((12,0x1000),np.uint8)
         self.SpriteRAM = np.zeros(0x100,np.uint8)
         self.RAM = np.zeros((8,0x2000), np.uint8)
         

@@ -177,10 +177,10 @@ class CPU6502(object):
         self.Y = np.uint8(0)              
         self.S = np.uint8(0)               
         self.P = 0            
-        self.DT = 0 
-        self.WT = 0 
+        self.DT = np.uint8(0) 
+        self.WT = np.uint16(0) 
         self.EA = np.uint16(0)
-        self.ET = 0
+        self.ET = np.uint16(0)
         self.INT_pending = 0
         self.nmicount = 0
 
@@ -912,7 +912,7 @@ class CPU6502(object):
                     else:
                         self.EmulationCPU(HDrawCycles)
                         if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
-                        self.EmulationCPU(HDrawCycles)
+                        self.EmulationCPU(HBlankCycles)
                     
                     self.Frames += 1
                     
@@ -1118,6 +1118,7 @@ class CPU6502(object):
                 #if self.MAPPER.Mapper != 69:
                     #self.emul_cycles += self.EXEC6502(1)
                     #self.exec_opcode()
+                #self.emul_cycles += self.EXEC6502(1)
                 self.NMI()
             self.PPU.Write(address,value)
 

@@ -79,6 +79,8 @@ class ROM(object):
     @property
     def Mirroring(self):
         return self.info[2]
+    def IsVMIRROR(self):
+        return self.Mirroring & 1
     def Mirroring_W(self,value):
         self.info[2] = value
         self.info[5] = ((value + 1) % 3) * 0x400
@@ -86,6 +88,8 @@ class ROM(object):
     @property
     def FourScreen(self):
         return self.info[3]
+    def Is4SCREEN(self):
+        return self.FourScreen
     def FourScreen_W(self,value):
         self.info[3] = value
 

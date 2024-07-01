@@ -593,7 +593,7 @@ def import_PPU_class(jit = True):
     return jitObject(PPU, ppu_spec, jit = jit)
 
 def load_PPU(consloe, jit = True):
-    ppu_class, ppu_type = import_PPU_class(jit = True)
+    ppu_class, ppu_type = import_PPU_class(jit = jit)
     ppu = ppu_class(consloe.memory, consloe.ROM)
     return ppu, ppu_type
     
