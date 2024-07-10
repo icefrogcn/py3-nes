@@ -17,12 +17,12 @@ import traceback
 from deco import *
 from jitcompile import jitObject
          
-import memory
+#import memory
 from nes import NES
 
 from mmc import *
 
-from memory import Memory
+from mmu import MMU
 from cpu_reg import CPU_Reg
 from cpu_memory import CPU_Memory
 
@@ -162,7 +162,7 @@ class CPU6502(object):
 
     def __init__(self,
                  MAPPER,# = MAPPER(),
-                 memory = Memory(),
+                 memory = MMU(),
                  PPU = PPU(),
                  ChannelWrite = ChannelWrite,
                  reg = CPU_Reg(),
@@ -805,7 +805,7 @@ class CPU6502(object):
     def implied6502(self):
         return
 
-
+    @property
     def status(self):
         return self.PC,self.exec_cycles,self.PPU.reg.PPUSTATUS,self.Frames,self.PPU.CurrentLine,self.A,self.X,self.Y,self.S,self.P,self.opcode
 
@@ -2170,7 +2170,7 @@ def import_CPU_class(addition_spec, jit = True):
 def load_CPU(consloe, addition_spec,jit = True):
     cpu_class, cpu_type = import_CPU_class(addition_spec,jit = jit)
     cpu = cpu_class(MAPPER = consloe.MAPPER,
-                        memory = consloe.memory,
+                        memory = consloe.MMU,
                         PPU = consloe.PPU,
                         ChannelWrite = consloe.APU.ChannelWrite)#, #consloe.APU,)
     return cpu, cpu_type

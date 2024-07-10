@@ -11,7 +11,7 @@ from numba import uint8,uint16,uint32
 from numba.typed import Dict
 from numba import types
 
-import memory
+import mmu
 
 #import rom
 

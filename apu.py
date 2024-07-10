@@ -13,7 +13,7 @@ from numba import types
 
 from midiconstants import *
 from nes import NES
-from memory import Memory
+from mmu import MMU
 
 # Volume adjust
 # Internal sounds
@@ -72,7 +72,7 @@ print('loading APU CLASS')
 #@jitclass(spec)
 class APU(object):
 
-    def __init__(self,memory = Memory(), debug = False):
+    def __init__(self,memory = MMU(), debug = False):
         self.tones = np.zeros(nVolumeChannel,np.float32)#[0] * 4
         self.volume = np.zeros(nVolumeChannel,np.uint16)#[0] * 4
         #self.v = np.zeros(0x4,np.uint16)#[0] * 4

@@ -37,48 +37,52 @@ def rom_ok(data):
         return False
 
 print('loading ROM CLASS')
-'''@jitclass([('info',uint16[:]), \
-           ('PROM_SIZE_array',uint8[:]), \
-           ('VROM_SIZE_array',uint8[:]), \
-           ('PROM_16K_SIZE',uint8), \
-           ('VROM_8K_SIZE',uint8), \
-           ('PROM',uint8[:]), \
-           ('VROM',uint8[:]) \
-           ])'''
+
 @jitclass
 class ROM(object):
     info : uint16[:]
-    PROM_SIZE_array: uint8[:]
-    VROM_SIZE_array: uint8[:]
-    PROM_16K_SIZE: uint8
-    VROM_8K_SIZE: uint8
-    PROM: uint8[:]
-    VROM: uint8[:]
+    data: uint8[::1]    #force array type C
         
-    def __init__(self, PROM = np.zeros(0x40, np.uint8), VROM = np.zeros(0x40, np.uint8)):
+    def __init__(self, data = np.zeros(0x40, np.uint8)):
         self.info = np.zeros(0x10, np.uint16)
-        self.PROM_SIZE_array = np.zeros(0x40, np.uint8)
-        self.VROM_SIZE_array = np.zeros(0x40, np.uint8)
-        self.PROM_16K_SIZE = 0
-        self.VROM_8K_SIZE = 0
-        self.PROM = PROM
-        self.VROM = VROM
-        
+
+        self.data = data
+        #self.PROM = PROM
+        #self.VROM = VROM
+
+    @property
+    def PROM_SIZE(self):
+        return self.PROM_16K_SIZE
+    @property
+    def VROM_SIZE(self):
+        return self.VROM_8K_SIZE
+    @property
+    def AndIt(self):
+        if self.VROM_SIZE:
+            return self.VROM_SIZE - 1
+    
+    @property
+    def PROM(self):
+        return self.data[16: self.PROM_SIZE * 0x4000 + 16]
+    @property
+    def VROM(self):
+        PrgMark = self.PROM_SIZE * 0x4000 + 16
+        if self.VROM_SIZE:
+            return self.data[PrgMark: self.VROM_SIZE * 0x2000 + PrgMark]
+        else:
+            return np.zeros(0x0, np.uint8)
+
     @property
     def Mapper(self):
-        return self.info[0]
-    def Mapper_W(self,value):
-        self.info[0] = value
+        return self.ROMCtrl2 + ((self.ROMCtrl & 0xF0) >> 4)
 
     @property
     def Trainer(self):
-        return self.info[1]
-    def Trainer_W(self,value):
-        self.info[1] = value
+        return self.ROMCtrl & 0x4
 
     @property
     def Mirroring(self):
-        return self.info[2]
+        return self.ROMCtrl & 0x1
     def IsVMIRROR(self):
         return self.Mirroring & 1
     def Mirroring_W(self,value):
@@ -87,17 +91,15 @@ class ROM(object):
 
     @property
     def FourScreen(self):
-        return self.info[3]
+        return self.ROMCtrl & 0x8
+    @property
     def Is4SCREEN(self):
         return self.FourScreen
-    def FourScreen_W(self,value):
-        self.info[3] = value
 
     @property
     def UsesSRAM(self):
-        return self.info[4]
-    def UsesSRAM_W(self,value):
-        self.info[4] = value
+        return True if self.ROMCtrl & 0x2 else False
+
 
     @property
     def MirrorXor(self):
@@ -108,6 +110,9 @@ class ROM(object):
     @property
     def PROM_8K_SIZE(self):
         return self.PROM_16K_SIZE << 1
+    @property
+    def PROM_16K_SIZE(self):
+        return self.data[0x4]
     @property
     def PROM_32K_SIZE(self):
         return self.PROM_16K_SIZE >> 1
@@ -120,10 +125,18 @@ class ROM(object):
     @property
     def VROM_4K_SIZE(self):
         return self.VROM_8K_SIZE << 1
+    @property
+    def VROM_8K_SIZE(self):
+        return self.data[0x5]
+
+    @property
+    def ROMCtrl(self):
+        return self.data[6]
+    @property
+    def ROMCtrl2(self):
+        return self.data[7]
 
 
-#ROM_class_type = nb.deferred_type()
-#ROM_class_type.define(ROM.class_type.instance_type)
 
 
 class nesROM(NES):
@@ -158,11 +171,11 @@ class nesROM(NES):
     
         self.PrgCount = self.GetPROM_SIZE(); self.PrgCount2 = self.PrgCount      #'16kB ROM banks 的数量
         print ("[ " , self.PrgCount , " ] 16kB ROM Bank(s)")
-        self.SetPROM()
+        #self.SetPROM()
 
         self.ChrCount = self.GetVROM_SIZE(); self.ChrCount2 = self.ChrCount      #'8kB VROM banks 的数量
         print ("[ " , self.ChrCount , " ] 8kB CHR Bank(s)")
-        self.SetVROM()
+        #self.SetVROM()
     
         self.ROMCtrl = self.data[6]
         print ("[ " , self.ROMCtrl , " ] ROM Control Byte #1")
@@ -217,20 +230,11 @@ class nesROM(NES):
             print ("Error: Trainer not yet supported.") #, VERSION
             return 0
 
-        self.ROM = ROM(self.PROM, self.VROM)
-        self.ROM.Mapper_W(self.Mapper)
+        #self.ROM = ROM(self.PROM, self.VROM)
+        self.ROM = ROM(np.array(self.data, np.uint8))
 
-        self.ROM.Trainer_W(self.Trainer)
-        self.ROM.Mirroring_W(self.Mirroring)
-        self.ROM.FourScreen_W(self.FourScreen)
-        self.ROM.UsesSRAM_W(self.UsesSRAM)
 
         #self.ROM.MirrorXor_W(self.MirrorXor)
-
-
-        self.ROM.PROM_16K_SIZE = self.PROM_16K_SIZE
-       
-        self.ROM.VROM_8K_SIZE = self.VROM_8K_SIZE       
 
         
         return self.ROM
@@ -346,9 +350,9 @@ if __name__ == '__main__':
     #print NES.CPal
     #CPal = [[item >> 16, item >> 8 & 0xFF ,item & 0xFF] for item in NES.CPal]
     #print CPal
-    ROM_info = ROM()
-    nesROM().LoadROM('roms//1942.nes')
-    romt = ROM(np.zeros(0x40, np.uint8),np.zeros(0x40, np.uint8))
+    #ROM_info = ROM()
+    #nesROM().LoadROM('roms//1942.nes')
+    romt = nesROM().LoadROM('roms//Contra (J).nes')
     print (dir(romt))
 
 

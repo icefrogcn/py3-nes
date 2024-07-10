@@ -21,7 +21,7 @@ import numba as nb
 from deco import *
 from wrfilemod import read_file_to_array
 
-import memory
+from mmu import MMU
 
 import rom
 from rom import nesROM
@@ -59,8 +59,8 @@ class CONSLOE():
         CPURunning = 1
         FirstRead = 1
 
-        self.memory = memory.Memory()
-        self.RAM = self.memory.RAM
+        self.MMU = MMU()
+        self.RAM = self.MMU.RAM
     
         self.debug = debug
         self.jit = jit
@@ -79,7 +79,7 @@ class CONSLOE():
         
     @property
     def status(self):
-        return "PC:%d,clockticks:%d PPUSTATUS:%d,Frames %d,CurrLine:%d a:%d X:%d Y:%d S:%d p:%d opcode:%d " %self.CPU.status()
+        return "PC:%d,clockticks:%d PPUSTATUS:%d,Frames %d,CurrLine:%d a:%d X:%d Y:%d S:%d p:%d opcode:%d " %self.CPU.status
 
 
     def LoadROM(self,filename):
@@ -119,7 +119,7 @@ class CONSLOE():
     def Load_PPU(self):
         Log_SYS('loading PPU CLASS')
         from ppu import load_PPU
-        self.PPU, self.PPU_type = load_PPU(self, jit = True)
+        self.PPU, self.PPU_type = load_PPU(self.MMU, jit = self.jit)
         print(self.PPU)
         Log_SYS('init PPU')
         self.PPU.pPPUinit(self.PPU_Running,self.PPU_render,self.PPU_debug)
@@ -138,12 +138,13 @@ class CONSLOE():
     
     def StartingUp(self):
         Log_SYS('RESET')
-        self.memory.RAM[::] = 0
-        self.memory.VRAM[::] = 0
-        self.memory.SpriteRAM[:] = 0
+        self.MMU.reset()
+        #self.memory.RAM[::] = 0
+        #self.memory.VRAM[::] = 0
+        #self.memory.SpriteRAM[:] = 0
         
         Log_SYS('init APU')
-        self.APU = APU(self.memory)
+        self.APU = APU(self.MMU)
         
         init6502()
 
@@ -154,8 +155,8 @@ class CONSLOE():
             self.Load_CPU()
             
             self.CPU.SET_NEW_MAPPER_TRUE()
-            self.CPU.MAPPER.MMC.reset()
             self.CPU.MAPPER.reset()
+            self.CPU.MAPPER.MMC.reset()
             
             LoadNES = 1
             Log_SYS("NEW MAPPER process")
@@ -272,7 +273,7 @@ class CONSLOE():
         start = time.time()
         while self.CPU.Frames == 0:
             Log_SYS('jitclass is compiling...%f %% %d' %((time.time()- start) / 1.20 , self.CPU.clockticks6502))
-            #print '6502:',self.status
+            print('6502: %s' %self.status)
             if self.CPU.clockticks6502 > 0:break
             if ((time.time()- start) / 1.20) > 150:break
             time.sleep(5)
@@ -286,7 +287,7 @@ class CONSLOE():
                     
                     if self.debug:
                         pass
-                        self.blitPatternTable()
+                        self.blitVRAM()
                         self.blitPal()
                         #self.batch.draw()
                     else:
@@ -297,7 +298,7 @@ class CONSLOE():
 
             print ('blitFrame: ',self.CPU.Frames)
             if self.CPU.Frames:
-                self.FrameBuffer = paintBuffer(self.PPU.FrameArray,self.PPU.Pal,self.PPU.Palettes)
+                self.FrameBuffer = paintBuffer(self.PPU.NTArray,self.PPU.Pal,self.PPU.Palettes)
                 
                 if self.debug == False and self.PPU_render:
                     pass
@@ -305,7 +306,7 @@ class CONSLOE():
                     self.blitPal()
                     
                 else:
-                    self.blitPatternTable()
+                    self.blitVRAM()
                     self.blitPal()
             
     def ScreenShow(self):
@@ -324,7 +325,8 @@ class CONSLOE():
         else:
             cv2.namedWindow('Pal', cv2.WINDOW_NORMAL)
             cv2.namedWindow('PatternTable0', cv2.WINDOW_NORMAL)
-            cv2.namedWindow('SC_TEST', cv2.WINDOW_NORMAL)
+            cv2.namedWindow('PatternTable1', cv2.WINDOW_NORMAL)
+            cv2.namedWindow('Nametable', cv2.WINDOW_NORMAL)
         #cv2.namedWindow('PatternTable2', cv2.WINDOW_NORMAL)
         #cv2.namedWindow('PatternTable3', cv2.WINDOW_NORMAL)
     def ShutDown(self):
@@ -344,14 +346,14 @@ class CONSLOE():
         cv2.imshow("Pal", np.array([[self.PPU.Pal[i] for i in self.PPU.Palettes]]))
         cv2.waitKey(1)
 
-    def blitPatternTable(self):
-        self.FrameBuffer = paintBuffer(self.PPU.FrameArray,self.PPU.Pal,self.PPU.Palettes)
+    def blitVRAM(self):
+        self.FrameBuffer = paintBuffer(self.PPU.NTArray,self.PPU.Pal,self.PPU.Palettes)
         cv2.line(self.FrameBuffer,(0,240),(768,240),(0,255,0),1) 
         cv2.line(self.FrameBuffer,(0,480),(768,480),(0,255,0),1) 
         cv2.line(self.FrameBuffer,(256,0),(256,720),(0,255,0),1) 
         cv2.line(self.FrameBuffer,(512,0),(512,720),(0,255,0),1) 
         cv2.rectangle(self.FrameBuffer, (self.PPU.scX,self.PPU.scY),(self.PPU.scX+255,self.PPU.scY + 240),(0,0,255),1)
-        cv2.imshow("PatternTable0", self.FrameBuffer)
+        cv2.imshow("Nametable", self.FrameBuffer)
         cv2.waitKey(1)
         
     def ShowFPS(self):
@@ -485,7 +487,7 @@ if __name__ == '__main__':
     #run(debug = True)
     ROMS = roms_list()
     ROMS_INFO = get_roms_mapper(ROMS)
-    fc = CONSLOE(True,jit = True)
+    fc = CONSLOE(True,jit = 1)
 
     while True:
         show_choose(ROMS_INFO)

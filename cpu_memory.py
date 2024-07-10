@@ -4,7 +4,7 @@ import numba as nb
 from numba.experimental import jitclass
 from numba import uint8,uint16
 
-from memory import Memory
+from mmu import MMU
 
 '''@jitclass([('memory',memory_type), \
            ('RAM',uint8[:,:]), \
@@ -14,10 +14,10 @@ from memory import Memory
 @jitclass
 class CPU_Memory(object):
     
-    memory:Memory
+    memory:MMU
     RAM:uint8[:,:]
 
-    def __init__(self, memory = Memory()):
+    def __init__(self, memory = MMU()):
         self.memory = memory
         self.RAM = self.memory.RAM
         #self.PRGRAM = self.RAM

@@ -11,14 +11,16 @@ from numba import jit
 from numba import types, typed
 from numba.experimental import jitclass
 from numba import int8,uint8,int16,uint16
+from numba.typed import Dict,List
+from numba.types import u1,u2,ListType
 import numpy as np
 import numba as nb
 
 
 from jitcompile import jitObject
 
-from rom import ROM #,ROM_class_type
-from memory import Memory
+from rom import ROM ,nesROM
+from mmu import MMU
 
 POST_ALL_RENDER = 0
 PRE_ALL_RENDER  = 1
@@ -28,11 +30,6 @@ TILE_RENDER     = 4
 
 
 
-VRAM_HMIRROR	= 0x00	# Horizontal
-VRAM_VMIRROR	= 0x01	# Virtical
-VRAM_MIRROR4	= 0x02	# All screen
-VRAM_MIRROR4L	= 0x03	# PA10 L屌掕 $2000-$23FF偺儈儔乕
-VRAM_MIRROR4H	= 0x04	# PA10 H屌掕 $2400-$27FF偺儈儔乕
 
 MMC_spec = [('ROM',ROM), \
            ('PROM_SIZE_array',uint8[:]), \
@@ -45,34 +42,73 @@ MMC_spec = [('ROM',ROM), \
            ]
 
 
-'''
-@jitclass()'''
+
 @jitclass
 class MMC(object):
     
     ROM: ROM
-    PROM_SIZE_array: uint8[:]
-    VROM_SIZE_array: uint8[:]
     PRGRAM: uint8[:,:]
-    VRAM: uint8[:,:]
-    PROM: uint8[:]
-    VROM: uint8[:]
+    MMU:MMU
+
+
     RenderMethod: uint8
     
-    def __init__(self, ROM = ROM(), memory = Memory()):
+    def __init__(self, ROM = ROM(), memory = MMU()):
 
         self.ROM = ROM
 
-        self.PROM_SIZE_array = ROM.PROM_SIZE_array
-        self.VROM_SIZE_array = ROM.VROM_SIZE_array
-      
         self.PRGRAM = memory.RAM
-        self.VRAM = memory.VRAM
-        self.PROM = ROM.PROM
-        self.VROM = ROM.VROM
+        #self.VRAM = memory.VRAM
+        self.MMU = memory
+        #self.PPU_MEM_BANK = memory.PPU_MEM_BANK
 
         self.RenderMethod = POST_ALL_RENDER
 
+    
+    @property
+    def VRAM_HMIRROR(self):
+        return 0x00	# Horizontal
+    @property
+    def VRAM_VMIRROR(self):
+        return 0x01	# Virtical
+    @property
+    def VRAM_MIRROR4(self):
+        return 0x02	# All screen
+    @property
+    def VRAM_MIRROR4L(self):
+        return 0x03	# PA10 L屌掕 $2000-$23FF偺儈儔乕
+    @property
+    def VRAM_MIRROR4H(self):
+        return 0x04	# PA10 H屌掕 $2400-$27FF偺儈儔乕
+
+
+    @property
+    def PPU_MEM_BANK(self):
+        return self.MMU.PPU_MEM_BANK
+    @property
+    def PPU_MEM_TYPE(self):
+        return self.MMU.PPU_MEM_TYPE
+    @property
+    def VRAM(self):
+        return self.MMU.VRAM
+
+    @property
+    def NTArray(self):
+        return self.MMU.NTArray
+    @property
+    def NT_BANK(self):
+        return self.MMU.NT_BANK
+
+
+    @property
+    def PROM(self):
+        return self.ROM.PROM
+
+    @property
+    def VROM(self):
+        return self.ROM.VROM
+
+    
     @property
     def Mapper(self):
         return self.ROM.Mapper
@@ -114,7 +150,10 @@ class MMC(object):
         self.ROM.Mirroring_W(value)  
         
     def reset(self):
-        if self.ROM.Is4SCREEN():
+        if self.ROM.VROM_8K_SIZE:
+            self.SetVROM_8K_Bank(0)
+            
+        if self.ROM.Is4SCREEN:
             self.SetVRAM_Mirror( 2 )
         elif self.ROM.IsVMIRROR():
             self.SetVRAM_Mirror( 1 )
@@ -175,17 +214,18 @@ class MMC(object):
 
 
     def SetCRAM_1K_Bank(self, page, bank):
-        #print "Set CRAM"
+        #"Set CRAM"
         bank &= 0x1F
         #CRAM = 0x8000 + 0x0400 * bank
         CRAM = 0x0400 * (bank & 0x7)
         self.VRAM[page] = self.PRGRAM[(bank & 0x18 >> 3) + 4][CRAM:CRAM + 0x400]
 
     def SetVRAM_1K_Bank(self, page, bank):
-        #print "Set VRAM"
+        # "Set VRAM"
         bank &= 0x3
-        VRAM = 0x0400 * bank + 4096
-        self.VRAM[page] = self.VRAM[bank]
+        ptr = 0x0400 * (bank & 0x3)
+        self.PPU_MEM_BANK[page] = self.VRAM[ptr:ptr+0x400]
+        self.PPU_MEM_TYPE[page] = 0x80
 
 
     def SetVRAM_Bank(self, bank0, bank1, bank2, bank3 ):
@@ -196,20 +236,38 @@ class MMC(object):
         self.SetVRAM_1K_Bank( 11, bank3 )
 
     def SetVRAM_Mirror(self, Mirror ):
-        if Mirror == VRAM_HMIRROR:
+        if Mirror == self.VRAM_HMIRROR:
             self.SetVRAM_Bank( 0, 0, 1, 1 )
+            #self.SetNT_bank(0, 0, 1, 1)
 			
-        elif Mirror == VRAM_VMIRROR:
+        elif Mirror == self.VRAM_VMIRROR:
             self.SetVRAM_Bank( 0, 1, 0, 1 )
+            #self.SetNT_bank( 0, 1, 0, 1 )
 			
-        elif Mirror == VRAM_MIRROR4L:
+        elif Mirror == self.VRAM_MIRROR4L:
             self.SetVRAM_Bank( 0, 0, 0, 0 )
+            #self.SetNT_bank( 0, 0, 0, 0 )
 			
-        elif Mirror == VRAM_MIRROR4H:
+        elif Mirror == self.VRAM_MIRROR4H:
             self.SetVRAM_Bank( 1, 1, 1, 1 )
+            #self.SetNT_bank( 1, 1, 1, 1 )
 			
-        elif Mirror == VRAM_MIRROR4:
+        elif Mirror == self.VRAM_MIRROR4:
             self.SetVRAM_Bank( 0, 1, 2, 3 )
+            #self.SetNT_bank( 0, 1, 2, 3 )
+
+
+    def SetNT_bank(self, bank0, bank1, bank2, bank3):
+        self.NT_BANK[bank0] = self.NTArray[0:240,0:256]
+        self.NT_BANK[bank1] = self.NTArray[0:240,256:512]
+        self.NT_BANK[bank0] = self.NTArray[0:240,512:768]
+        self.NT_BANK[bank2] = self.NTArray[240:480,0:256]
+        self.NT_BANK[bank3] = self.NTArray[240:480,256:512]
+        self.NT_BANK[bank2] = self.NTArray[240:480,512:768]
+        
+        self.NT_BANK[bank0] = self.NTArray[480:720,0:256]
+        self.NT_BANK[bank1] = self.NTArray[480:720,256:512]
+        
 
     def SetVROM_8K_Bank(self,bank):
         for i in range(8):
@@ -239,10 +297,11 @@ class MMC(object):
         self.SetVROM_1K_Bank( page+1, bank*2+1 );
 
     def SetVROM_1K_Bank(self, page, bank):
-        #print (bank,self.ROM.VROM_1K_SIZE)
+        
         bank %= self.ROM.VROM_1K_SIZE
         #self.VRAM[page*0x400:page*0x400 + 0x400] = self.VROM[0x0400*bank:0x0400*bank + 0x400]
-        self.VRAM[page] = self.VROM[0x0400*bank:0x0400*bank + 0x400]
+        self.PPU_MEM_BANK[page] = self.VROM[0x0400*bank:0x0400*bank + 0x400]
+        self.PPU_MEM_TYPE[page] = 0x00
 
 
 def MMC_spec():
@@ -253,6 +312,14 @@ def MMC_spec():
             }
     return addition_spec
 
+def import_MMC_class(jit = True):
+    return jitObject(MMC, [], jit = jit)
+
+def load_MMC(MMU = MMU(), jit = True):
+    mmc_class, mmc_type = import_MMC_class(jit = jit)
+    mmc = mmc_class(MMU)
+    return mmc, mmc_type
+
 def import_MAPPER(mapper = 0, jit = True):
     mapper_mod = __import__('mappers.mapper%d' %mapper, fromlist=['MAPPER','mapper_spec'])
 
@@ -261,11 +328,19 @@ def import_MAPPER(mapper = 0, jit = True):
 def load_MAPPER(consloe, jit = True):
     mapper_class, mapper_type = import_MAPPER(mapper = consloe.ROM.Mapper, jit = jit)
 
-    mapper = mapper_class(MMC(consloe.ROM, consloe.memory))
+    mapper = mapper_class(MMC(consloe.ROM, consloe.MMU))
     return mapper, mapper_type
 
+def SetVRAM_1K_Bank(c, page, bank):
+        #print "Set VRAM"
+        #bank &= 0x3
+        ptr = 0x0400 * (bank & 0x3)
+        c.PPU_MEM_BANK[page] = c.VRAM[ptr:ptr+0x400]
+        
 if __name__ == '__main__':
-    print(import_MAPPER())
+    #mapper = import_MAPPER()
+    #print(mapper)
+    mmc = MMC(nesROM().LoadROM('roms//1944.nes'))
     
 
 

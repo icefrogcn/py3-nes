@@ -10,9 +10,8 @@ from numba import uint8,uint16,uint32
 from numba.typed import Dict
 from numba import types
 
-from memory import Memory#,memory_type
-from ppu_memory import PPU_Memory#,PPU_memory_type
-from rom import ROM#,ROM_class_type
+from mmu import MMU
+#from rom import ROM
 
 #PPU REGISTER
 
@@ -100,38 +99,43 @@ class PPUBIT(object):
         return 0x03
 
 
-
-'''@jitclass([('bit',PPU_bit_type), \
-           ('memory',PPU_memory_type), \
-           ('reg',uint16[:]), \
-           ('ROM',ROM_class_type), \
-           ('VRAM',uint8[:]), \
-           ('SpriteRAM',uint8[:]), \
-           ('Palettes',uint8[:]), \
-           ('RAM',uint8[:,:]) 
-           ])'''
-
 @jitclass
 class PPUREG(object):
     bit:PPUBIT
-    memory:PPU_Memory
+    MMU:MMU
     reg:uint16[:]
-    ROM:ROM
-    VRAM:uint8[:,:]
-    SpriteRAM:uint8[:]
-    Palettes:uint8[:]
-    RAM:uint8[:,:]
-    def __init__(self, memory = PPU_Memory(), ROM = ROM()):
+
+    def __init__(self, MMU = MMU()):
         self.bit = PPUBIT()
-        self.memory = memory
+        self.MMU = MMU
         self.reg = np.zeros(0x20, np.uint16) 
-        self.VRAM = self.memory.VRAM 
-        self.SpriteRAM = self.memory.SpriteRAM
-        self.Palettes = self.memory.Palettes
         
-        self.ROM = ROM
-        self.RAM = self.memory.PRGRAM
+        #self.ROM = ROM
+        
         self.reg[9] = 1
+
+    @property
+    def RAM(self):
+        return self.MMU.RAM 
+
+    @property
+    def VRAM(self):
+        return self.MMU.VRAM 
+
+    @property
+    def SpriteRAM(self):
+        return self.MMU.SpriteRAM
+    @property
+    def Palettes(self):
+        return self.MMU.Palettes 
+
+    @property
+    def PPU_MEM_BANK(self):
+        return self.MMU.PPU_MEM_BANK
+    @property
+    def PPU_MEM_TYPE(self):
+        return self.MMU.PPU_MEM_TYPE
+    
 
     def read(self,address):
         if address == 0x2002:
@@ -165,14 +169,15 @@ class PPUREG(object):
             self.PPUDATA_W(value)
         elif addr == 0x14:
             self.OAMDMA_W(value)
-        
+
+    '''
     @property
     def Mirroring(self):
         return self.ROM.Mirroring
     @property
     def MirrorXor(self):
         return self.ROM.MirrorXor
-
+'''
         
     @property       #2000
     def PPUCTRL(self):
@@ -278,24 +283,30 @@ class PPUREG(object):
             addr &= 0xEFFF
         #else:
             #self.reg[8] = self.VRAM[addr & 0x3FFF]
-        self.reg[8] = self.VRAM[addr>>10][addr&0x03FF]
+        self.reg[8] = self.PPU_MEM_BANK[addr>>10][addr&0x03FF]
         
         return data
     
     def PPUDATA_W(self,value):  #2007 W
         #self.PPU7_Temp_W(value)
         #self.reg[6] &= 0x3FFF
-        vaddr = self.reg[6] & 0x3FFF;
-        if vaddr >= 0x3F00:
-            value &= 0x3F
-            if vaddr & 0xF == 0:
-                self.Palettes[0x0] = self.Palettes[0x10] = value
-            elif vaddr & 0x10 == 0:
-                self.Palettes[vaddr & 0xF] = value #BG
-            else:
-                self.Palettes[vaddr & 0x1F] = value #SP
-            self.Palettes[0x04] = self.Palettes[0x08] = self.Palettes[0x0C] = self.Palettes[0x00]
-            self.Palettes[0x10] = self.Palettes[0x14] = self.Palettes[0x18] = self.Palettes[0x1C] = self.Palettes[0x00]
+        vaddr = self.reg[6] & 0x3FFF
+        self.reg[6] += 32 if self.reg[0] & 0x04 else 1
+                                        #PPU_INC32_BIT
+        if vaddr >= 0x3000:
+            if vaddr >= 0x3F00:
+                value &= 0x3F
+                if vaddr & 0xF == 0:
+                    self.Palettes[0x0] = self.Palettes[0x10] = value
+                elif vaddr & 0x10 == 0:
+                    self.Palettes[vaddr & 0xF] = value #BG
+                else:
+                    self.Palettes[vaddr & 0x1F] = value #SP
+                self.Palettes[0x04] = self.Palettes[0x08] = self.Palettes[0x0C] = self.Palettes[0x00]
+                self.Palettes[0x10] = self.Palettes[0x14] = self.Palettes[0x18] = self.Palettes[0x1C] = self.Palettes[0x00]
+                return
+            vaddr &=0xEFFF
+        
             #self.Palettes[self.PPUADDR & 0x1F] = value
             #if self.PPUADDR & 3 == 0 and value:
             #    self.Palettes[(self.PPUADDR & 0x1F) ^ 0x10] = value
@@ -305,8 +316,10 @@ class PPUREG(object):
         #        self.VRAM[self.PPUADDR ^ self.ROM.MirrorXor] = value
             #self.VRAM[self.PPUADDR] = value
         
-        self.reg[6] += 32 if self.reg[0] & 0x04 else 1
-                                        #PPU_INC32_BIT
+        if self.PPU_MEM_TYPE[vaddr>>10] != 0x00: #VRAM/CRAM
+           self.PPU_MEM_BANK[vaddr>>10][vaddr&0x03FF] = value
+            
+
 
         
     @property
@@ -333,17 +346,9 @@ if __name__ == '__main__':
     pass
     #dd = jit_class_test()
     print(PPUBIT())
-    print(PPUREG())
-    #t1 = jit_class_test()
-    #t2 = class_test()
-    #start = time.time()
-    #print t1.test
-    #print time.time() - start
-    #start = time.time()
-    #print t2.test
-    #print time.time() - start
-   #reg.PPUCTRL_W(1)
-    #print reg.PPUCTRL,reg.Palettes
+    reg = PPUREG()
+    print(reg)
+    
     
 
     
