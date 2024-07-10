@@ -6,7 +6,7 @@ from numba import int8,uint8,int16,uint16,uint32
 import numba as nb
 import numpy as np
 
-#from main import cartridge
+
 
 mapper_spec = []
 #@jitclass
@@ -26,7 +26,7 @@ class MAPPER:
         return 0
     
     def reset(self):
-        self.MMC.SetVROM_8K_Bank(0)
+        #self.MMC.SetVROM_8K_Bank(0)
 
         if self.MMC.ROM.PROM_16K_SIZE == 1: # 16K only
             self.MMC.SetPROM_16K_Bank( 4, 0 )
