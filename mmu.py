@@ -15,6 +15,7 @@ class MMU(object):
     PPU_MEM_BANK:ListType(u1[::1])
     PPU_MEM_TYPE:uint8[:]
     VRAM:uint8[::1] #force array type C
+    CRAM:uint8[::1] #force array type C
     
     SpriteRAM:uint8[:]
     Palettes:uint8[:]
@@ -28,9 +29,10 @@ class MMU(object):
     def __init__(self):
         self.RAM = np.zeros((8,0x2000), np.uint8)
         
+        self.CRAM = np.zeros(32*1024,np.uint8)
+        self.VRAM = np.zeros(4*1024,np.uint8)
         self.PPU_MEM_BANK = List([np.zeros(0x400,np.uint8) for i in range(12)])
         self.PPU_MEM_TYPE = np.zeros(12,np.uint8)
-        self.VRAM = np.zeros(4*1024,np.uint8)
         
         self.SpriteRAM = np.zeros(0x100,np.uint8)
         self.Palettes = np.zeros(0x20,np.uint8)
@@ -40,6 +42,7 @@ class MMU(object):
         self.NT_BANK = List.empty_list(u1[:,::1])
     
     def reset(self):
+        self.CRAM[:] = 0
         self.VRAM[:] = 0
         self.SpriteRAM[:] = 0
         self.RAM[::] = 0
