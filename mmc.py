@@ -91,6 +91,9 @@ class MMC(object):
     @property
     def VRAM(self):
         return self.MMU.VRAM
+    @property
+    def CRAM(self):
+        return self.MMU.CRAM
 
     @property
     def NTArray(self):
@@ -152,6 +155,8 @@ class MMC(object):
     def reset(self):
         if self.ROM.VROM_8K_SIZE:
             self.SetVROM_8K_Bank(0)
+        else:
+            self.SetCRAM_8K_Bank(0)
             
         if self.ROM.Is4SCREEN:
             self.SetVRAM_Mirror( 2 )
@@ -211,14 +216,19 @@ class MMC(object):
         self.SetPROM_8K_Bank( 6, bank2 )
         self.SetPROM_8K_Bank( 7, bank3 )
 	
+    def SetCRAM_8K_Bank(self,bank):
+        for i in range(8):
+            self.SetCRAM_1K_Bank( i, bank * 8 + i )
+        
 
 
     def SetCRAM_1K_Bank(self, page, bank):
-        #"Set CRAM"
+        print("Set PPU bank CRAM",page)
         bank &= 0x1F
-        #CRAM = 0x8000 + 0x0400 * bank
-        CRAM = 0x0400 * (bank & 0x7)
-        self.VRAM[page] = self.PRGRAM[(bank & 0x18 >> 3) + 4][CRAM:CRAM + 0x400]
+        ptr = 0x0400 * bank
+        self.PPU_MEM_BANK[page] = self.CRAM[ptr:ptr+0x400]
+        self.PPU_MEM_TYPE[page] = 0x01
+        print(self.PPU_MEM_BANK[page],bank)
 
     def SetVRAM_1K_Bank(self, page, bank):
         # "Set VRAM"
