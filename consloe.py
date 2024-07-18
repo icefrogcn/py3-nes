@@ -301,7 +301,7 @@ class CONSLOE():
                         self.blitPal()
 
     def blitFrame_thread(self):
-        while self.Running:
+        while True:
             #print('blit thread',self.CPU.isDraw,self.CPU.Frames,self.CPU.clockticks6502)
             if self.CPU.isDraw:
                 self.CPU.isDraw = 0
@@ -496,7 +496,7 @@ if __name__ == '__main__':
     #run(debug = True)
     ROMS = roms_list()
     ROMS_INFO = get_roms_mapper(ROMS)
-    fc = CONSLOE(True,jit = 1)
+    fc = CONSLOE(True,jit = 0)
 
     while True:
         show_choose(ROMS_INFO)

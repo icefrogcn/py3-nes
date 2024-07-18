@@ -35,7 +35,9 @@ lookup_PT = np.array([[((i>>8 & 1<<b)>>b<<1) + ((i & 1<<b)>>b) for b in range(0x
 #@jitclass
 class PPU(object):
     reg:PPUREG
-    #ROM:ROM
+
+    loopy_y:uint16
+    loopy_shift:uint16
     
     CurrentLine:uint16
     HScroll:uint16
@@ -49,10 +51,7 @@ class PPU(object):
     ScreenArray:uint8[:,:]
     ATarray:uint8[:,:]
     #NT_BANK:ListType(uint8[::1])
-    #FrameNT0:uint8[:,:]
-    #FrameNT1:uint8[:,:]
-    #FrameNT2:uint8[:,:]
-    #FrameNT3:uint8[:,:]
+
     FrameBuffer:uint8[:,:,:]
     Running:uint8
     render:uint8
@@ -70,7 +69,8 @@ class PPU(object):
         self.reg = reg
         
 
-
+        self.loopy_y = 0
+        self.loopy_shift = 0
     
         self.PatternTableTiles = np.zeros((0x2000 >> 4, 8, 8),np.uint8)
         self.Pal        = pal
@@ -78,10 +78,7 @@ class PPU(object):
         self.ScreenArray = np.zeros((240, 256),np.uint8)
         self.ATarray = np.zeros((256, 256),np.uint8)
         #self.NT_BANK = List([np.zeros((240, 256),np.uint8) for i in range(4)])
-        #self.FrameNT0 = self.NTArray[0:240,0:256]
-        #self.FrameNT1 = self.NTArray[0:240,256:512]
-        #self.FrameNT2 = self.NTArray[240:480,0:256]
-        #self.FrameNT3 = self.NTArray[240:480,256:512]
+
         #self.FrameBuffer = np.zeros((720, 768, 3),np.uint8)
         
         #self.BGPAL = [0] * 0x10
@@ -135,10 +132,8 @@ class PPU(object):
         
     @property
     def Mirroring(self):
-        return 1 #self.ROM.Mirroring
-    #@property
-    #def MirrorXor(self):
-    #    return self.ROM.MirrorXor
+        return 0 #self.ROM.Mirroring
+
     
     def pPPUinit(self,Running = 1,render = 1,debug = 0):
         self.Running = Running
@@ -146,29 +141,11 @@ class PPU(object):
         self.debug = debug
         
 
-        #self.ScrollToggle = 0 #$2005-$2006 Toggle PPU56Toggle
-
         #self.loopy_v = 0
         #self.loopy_t = 0
         #self.loopy_x = 0
-        #self.loopy_y = 0
-        #self.loopy_shift = 0
-
-        #self.loopy_v0 = 0
-        #self.loopy_t0 = 0
-        #self.loopy_x0 = 0
-        #self.loopy_y0 = 0
-        #self.loopy_shift0 = 0
 
 
-        #self.width,self.height = 257,241
-
-        #
-        
-        #self.blankPixel = 0 #np.array([16,16,16] ,dtype=np.uint8)
-        
-        #self.blankLine = np.array([self.blankPixel] * self.width ,dtype=np.uint8)
-        #self.blankLine = [[0,0,16]] * self.height 
         
         #'DF: array to draw each frame to'
         #self.vBuffer = [16]* (256 * 241 - 1) 
@@ -177,11 +154,9 @@ class PPU(object):
         
         #self.vBuffer = np.array([self.blankLine] * self.height ,dtype=np.uint8)
         
-        
-        
-        #self.PatternTable = np.uint8(0)
 
-        #self.Pal = np.array([[item >> 16, item >> 8 & 0xFF ,item & 0xFF] for item in NES.CPal])
+
+
     @property
     def sp16(self):
         return 1 if self.reg.PPUCTRL & self.reg.bit.PPU_SP16_BIT else 0
@@ -195,10 +170,10 @@ class PPU(object):
         self.reg.write(address,value)
 
     def VBlankStart(self):
-        self.reg.reg[2] |= 0x80#PPU_VBLANK_FLAG
+        self.reg.reg[2] |= 0x80     #PPU_VBLANK_FLAG
     def VBlankEnd(self):
         self.reg.PPUSTATUS_ZERO()
-
+ 
     def CurrentLine_ZERO(self):
         self.CurrentLine = 0
                 
@@ -209,11 +184,6 @@ class PPU(object):
         if self.CurrentLine == 0:
             pass
             '''
-            self.FrameStart()
-            self.ScanlineNext()
-            #mapper->HSync( scanline )
-            self.ScanlineStart()
-
             self.loopy_v0 = self.loopy_v
             self.loopy_t0 = self.loopy_t
             self.loopy_x0 = self.loopy_x
@@ -236,9 +206,9 @@ class PPU(object):
         #if self.CurrentLine < 8 :
             #self.Status = self.Status & 0x3F
 
-        if self.CurrentLine == 239 :
+        #if self.CurrentLine == 239 :
             #self.Status = self.Status | 0x80#PPU_VBLANK_FLAG
-            self.reg.PPUSTATUS_W(self.reg.PPUSTATUS | 0x80) #PPU_VBLANK_FLAG
+        #    self.reg.PPUSTATUS_W(self.reg.PPUSTATUS | 0x80) #PPU_VBLANK_FLAG
 
         if self.CurrentLine > self.SpriteRAM[0] + 8:
             self.reg.PPUSTATUS_W(self.reg.PPUSTATUS | 0x40)#PPU_SPHIT_FLAG
@@ -254,16 +224,40 @@ class PPU(object):
         '''self.sp_h = 16 if self.Control1 & PPU_SP16_BIT else 8
 
 '''
-
+    @property
+    def loopy_v(self):
+        return self.reg.loopy_v
+    @loopy_v.setter
+    def loopy_v(self,value):
+        self.reg.loopy_v = value
+    @property
+    def loopy_x(self):
+        return self.reg.loopy_x
+    @loopy_x.setter
+    def loopy_x(self,value):
+        self.reg.loopy_x = value
+    @property
+    def loopy_t(self):
+        return self.reg.loopy_t
+    @loopy_t.setter
+    def loopy_t(self,value):
+        self.reg.loopy_t = value
+                
+    def FrameStart(self):
+        if self.isDispON:
+            self.loopy_v = self.loopy_t
+            self.loopy_shift = self.loopy_x
+            self.loopy_y = (self.loopy_v & 0x7000)>>12
+    
     def ScanlineStart(self):
-        if( self.reg.PPUMASK & (PPU_BGDISP_BIT|PPU_SPDISP_BIT) ):
+        if self.isDispON :
             self.loopy_v = (self.loopy_v & 0xFBE0)|(self.loopy_t & 0x041F)
             self.loopy_shift = self.loopy_x
             self.loopy_y = (self.loopy_v&0x7000)>>12
             #nes->mapper->PPU_Latch( 0x2000 + (loopy_v & 0x0FFF) );
                 
     def ScanlineNext(self):
-        if( self.reg.PPUMASK & (PPU_BGDISP_BIT|PPU_SPDISP_BIT) ):
+        if self.isDispON:
             if( (self.loopy_v & 0x7000) == 0x7000 ):
                 self.loopy_v &= 0x8FFF
                 if( (self.loopy_v & 0x03E0) == 0x03A0 ):
@@ -278,13 +272,6 @@ class PPU(object):
                 self.loopy_v += 0x1000
 
             self.loopy_y = (self.loopy_v&0x7000)>>12
-                
-    def FrameStart(self):
-        if self.reg.PPUMASK & (PPU_SPDISP_BIT|PPU_BGDISP_BIT):
-            self.loopy_v = self.loopy_t
-            self.loopy_shift = self.loopy_x
-            self.loopy_y = (self.loopy_v & 0x7000)>>12
-
                     
     
 
@@ -297,8 +284,15 @@ class PPU(object):
         
         #return self.PatternTableArr(self.VRAM[PatternTablesAddress:PatternTablesAddress + 0x1000])
 
-
-
+    @property
+    def isDispON(self):
+        return self.reg.PPUMASK & (self.reg.bit.PPU_SPDISP_BIT|self.reg.bit.PPU_BGDISP_BIT)
+    @property
+    def IsBGON(self):
+        return self.reg.PPUMASK & self.reg.bit.PPU_BGDISP_BIT
+    @property
+    def IsSPON(self):
+        return self.reg.PPUMASK & self.reg.bit.PPU_SPDISP_BIT
         
     def RenderFrame(self):
         #return
@@ -417,25 +411,6 @@ class PPU(object):
             self.ATarray[::] = 0
             
             
-    def RenderNameTable(self,AttributeTables, FrameBuffer):
-        tempFrame = np.zeros((257, 257),np.uint8)
-        for i in range(len(AttributeTables)):
-            col = i >> 3; row = i & 7
-            if AttributeTables[i] == 0:
-                continue
-            tempFrame[(col << 5)        :(col << 5) + 16 ,  (row << 5)      : (row  << 5) + 16] = (AttributeTables[i] & 0b11) << 2
-            tempFrame[(col << 5) + 16   :(col << 5) + 32 ,  (row << 5)      : (row  << 5) + 16] = (AttributeTables[i] & 0b110000) >> 2
-            tempFrame[(col << 5)        :(col << 5) + 16 ,  (row << 5) + 16 : (row  << 5) + 32] = (AttributeTables[i] & 0b1100)
-            tempFrame[(col << 5) + 16   :(col << 5) + 32 ,  (row << 5) + 16 : (row  << 5) + 32] = (AttributeTables[i] & 0b11000000) >> 4
-
-        
-        FrameBuffer |= tempFrame[0:240,0:256]
-
-        [rows, cols] = FrameBuffer.shape
-        for i in range(rows):
-            for j in range(cols):
-                if FrameBuffer[i,j] & 3 == 0: 
-                    FrameBuffer[i,j] == 0
 
     def MirrorNT(self):
             self.NTArray[0:240,512:768] = self.NTArray[0:240,0:256]     #0
@@ -445,26 +420,6 @@ class PPU(object):
             self.NTArray[240:480,512:768] = self.NTArray[240:480,0:256] #2            
 
         
-    def RenderNameTableH(self, nt0, nt1):
-        tempBuffer0 = self.NameTableArr(nt0)
-        self.RenderNameTable(self.AttributeTables_data(nt0), tempBuffer0)
-        
-        tempBuffer1 = self.NameTableArr(nt1)
-        self.RenderNameTable(self.AttributeTables_data(nt1), tempBuffer1)
-        
-        self.NTArray[0:480,0:768] = np.row_stack((np.column_stack((tempBuffer0,tempBuffer1,tempBuffer0)),np.column_stack((tempBuffer0,tempBuffer1,tempBuffer0))))
-
-    
-    def RenderNameTableV(self, nt0, nt2):
-        tempBuffer0 = self.NameTableArr(nt0)
-        self.RenderNameTable(self.AttributeTables_data(nt0), tempBuffer0)
-        
-        tempBuffer2 = self.NameTableArr(nt2)
-        self.RenderNameTable(self.AttributeTables_data(nt2), tempBuffer2)
-        
-        self.NTArray[0:720,0:512] =  np.column_stack((np.row_stack((tempBuffer0,tempBuffer2,tempBuffer0)),np.row_stack((tempBuffer0,tempBuffer2,tempBuffer0))))
-
-
     def RenderAttributeTables(self,offset):
         AttributeTablesAddress = 0x2000 + (offset * 0x400 + 0x3C0)
         AttributeTablesSize = 0x40

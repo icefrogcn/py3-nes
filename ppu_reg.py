@@ -73,7 +73,7 @@ class PPUBIT(object):
     # PPU Status Register	PPU #2 $2002
     @property
     def PPU_VBLANK_FLAG(self):
-        return 0x80
+        return uint8(0x80)
     @property
     def PPU_SPHIT_FLAG(self):
         return 0x40
@@ -104,7 +104,10 @@ class PPUREG(object):
     bit:PPUBIT
     MMU:MMU
     reg:uint16[:]
-
+    loopy_x:uint16
+    _loopy_v:uint16
+    _loopy_t:uint16
+    
     def __init__(self, MMU = MMU()):
         self.bit = PPUBIT()
         self.MMU = MMU
@@ -113,7 +116,10 @@ class PPUREG(object):
         #self.ROM = ROM
         
         self.reg[9] = 1
-
+        self.loopy_x = 0
+        self._loopy_v = 0
+        self._loopy_t = 0
+        
     @property
     def RAM(self):
         return self.MMU.RAM 
@@ -151,9 +157,9 @@ class PPUREG(object):
         self.reg[8] = value
         addr = address & 0xFF
         if addr == 0:
-            self.PPUCTRL_W(value)
+            self.PPUCTRL = value
         elif addr == 0x01:
-            self.PPUMASK_W(value)
+            self.PPUMASK = value
         elif addr == 0x02:
             pass
             #self.PPU7_Temp_W(value)
@@ -178,11 +184,14 @@ class PPUREG(object):
     def MirrorXor(self):
         return self.ROM.MirrorXor
 '''
+    def ver(self):
+        print('ver')
         
     @property       #2000
     def PPUCTRL(self):
         return self.reg[0]
-    def PPUCTRL_W(self,value): 
+    @PPUCTRL.setter
+    def PPUCTRL(self,value): 
         self.reg[0] = value
 
     @property
@@ -200,7 +209,8 @@ class PPUREG(object):
     @property       #2001
     def PPUMASK(self):
         return self.reg[1]
-    def PPUMASK_W(self,value):
+    @PPUMASK.setter
+    def PPUMASK(self,value):
         self.reg[1] = value
         
     @property
@@ -210,7 +220,7 @@ class PPUREG(object):
         self.reg[9] = 1
         #if ret & 0x80:
         #    self.reg[2] &= 0x60 #PPU_SPHIT_FLAG + PPU_SPMAX_FLAG
-        self.reg[2] &= ~self.bit.PPU_VBLANK_FLAG
+        self.reg[2] &= 0x7F # cleared vblank after reading $2002  ~self.bit.PPU_VBLANK_FLAG
         return ret
         
     def PPUSTATUS_W(self,value):
@@ -247,27 +257,50 @@ class PPUREG(object):
     @property
     def vScroll(self): #vScroll
         return self.reg[11]
+
+    
     @property
-    def AddressHi(self): #AddressHi
-        return self.reg[12]
+    def loopy_t(self): #AddressHi
+        return self._loopy_t #reg[12]
+    @loopy_t.setter
+    def loopy_t(self,value):
+        self._loopy_t = value #reg[12] = value
+
+
 
     def PPUSCROLL_W(self,value):#2005
         if self.ScrollToggle:
             self.reg[10] = value
+            self.loopy_t = (self.loopy_t & 0xFFE0)|(value >> 3)
+            self.loopy_x = value & 0x07
         else:
             self.reg[11] = value
+            #tile Y t:0000001111100000=d:11111000
+            self.loopy_t = (self.loopy_t & 0xFC1F)|((value & 0xF8) << 2)
+            #scroll offset Y t:0111000000000000=d:00000111
+            self.loopy_t = (self.loopy_t & 0x8FFF)|((value & 0x07) << 12)
+            
         self.ScrollToggle_W()
         #self.reg[5] = value
         
     @property
     def PPUADDR(self):          #2006
         return self.reg[6]
+    @property
+    def loopy_v(self):
+        return self._loopy_v #self.reg[6]
+    @loopy_v.setter
+    def loopy_v(self,value):
+        self._loopy_v = value #reg[6] = value
     
     def PPUADDR_W(self,value):
         if self.reg[9]:
             self.reg[12] = value << 8
+            self.loopy_t = (self.loopy_t & 0x00FF)|((value & 0x3F) << 8)
         else:
             self.reg[6] = self.reg[12] | value
+            self.loopy_t = (self.loopy_t & 0x00FF) | value
+            self.loopy_v = self.loopy_t
         self.ScrollToggle_W()
         #self.reg[6] = value
         

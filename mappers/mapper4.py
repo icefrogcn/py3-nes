@@ -180,6 +180,7 @@ class MAPPER(object):
             if( self.irq_preset ):
                 self.irq_counter = self.irq_latch;
                 self.irq_preset = 0
+                
             elif (self.irq_counter > 0):
                 self.irq_counter -= 1
 
@@ -213,10 +214,10 @@ class MAPPER(object):
         if( self.MMC.VROM_1K_SIZE ):
             if( self.reg[0] & 0x80 ):
                 self.MMC.SetVROM_8K_Bank8( self.chr4, self.chr5, self.chr6, self.chr7,
-                                                 self.chr01, self.chr01+1, self.chr23, self.chr23+1 )
+                                           self.chr01, self.chr01+1, self.chr23, self.chr23+1 )
             else:
                 self.MMC.SetVROM_8K_Bank8( self.chr01, self.chr01+1, self.chr23, self.chr23+1,
-                                                 self.chr4, self.chr5, self.chr6, self.chr7 );
+                                           self.chr4, self.chr5, self.chr6, self.chr7 );
             
 
 #MAPPER_type = nb.deferred_type()

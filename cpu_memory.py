@@ -14,20 +14,24 @@ from mmu import MMU
 @jitclass
 class CPU_Memory(object):
     
-    memory:MMU
-    RAM:uint8[:,:]
+    MMU:MMU
+    #RAM:uint8[:,:]
 
-    def __init__(self, memory = MMU()):
-        self.memory = memory
-        self.RAM = self.memory.RAM
-        #self.PRGRAM = self.RAM
-        #self.bank0 = self.PRGRAM[0] #  RAM 
-        #self.bank6 = self.PRGRAM[3] #  SaveRAM 
-        #self.bank8 = self.PRGRAM[4] #  8-E are PRG-ROM
-        #self.bankA = self.PRGRAM[5] # 
-        #self.bankC = self.PRGRAM[6] # 
-        #self.bankE = self.PRGRAM[7] # 
+    def __init__(self, MMU = MMU()):
+        self.MMU = MMU
+        #self.RAM = self.MMU.RAM
 
+        #self.bank0 = self.RAM[0] #  RAM 
+        #self.bank6 = self.RAM[3] #  SaveRAM 
+        #self.bank8 = self.RAM[4] #  8-E are PRG-ROM
+        #self.bankA = self.RAM[5] # 
+        #self.bankC = self.RAM[6] # 
+        #self.bankE = self.RAM[7] # 
+
+    @property
+    def RAM(self):
+        return self.MMU.RAM
+    
     def Read(self,address):
         bank = address >> 13
         value = 0

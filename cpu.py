@@ -66,48 +66,48 @@ CPU_Reg_type.define(CPU_Reg.class_type.instance_type)
 JOYPAD_type = nb.deferred_type()
 JOYPAD_type.define(JOYPAD.class_type.instance_type)
 
-cpu_spec = [('PC',uint16),
-            ('A',uint8),
-            ('X',uint8),
-            ('Y',uint8),
-            ('S',uint8),
-            ('P',uint16),
-            ('reg',CPU_Reg_type),
-            ('INT_pending',uint8),
-            ('nmicount',int16),
-            ('DT',uint8),
-            ('WT',uint16),
-            ('EA',uint16),
-            ('ET',uint16),
-            ('clockticks6502',uint32),
-            ('exec_cycles',uint8),
-            ('emul_cycles',uint64),
-            ('base_cycles',uint64),
-            ('TOTAL_cycles',uint32),
-            ('DMA_cycles',uint32),
-            ('opcode',uint8),
-            ('STACK',uint8[:]),
-            ('ZN_Table',uint8[:]),
-            ('memory',CPU_Memory_type),
-            ('RAM',uint8[:,:]),
-            ('bank0',uint8[:]),
-            ('Sound',uint8[:]),
+cpu_spec = [#('PC',uint16),
+            #('A',uint8),
+            #('X',uint8),
+            #('Y',uint8),
+            #('S',uint8),
+            #('P',uint16),
+            #('reg',CPU_Reg_type),
+            #('INT_pending',uint8),
+            #('nmicount',int16),
+            #('DT',uint8),
+            #('WT',uint16),
+            #('EA',uint16),
+            #('ET',uint16),
+            #('clockticks6502',uint32),
+            #('exec_cycles',uint8),
+            #('emul_cycles',uint64),
+            #('base_cycles',uint64),
+            #('TOTAL_cycles',uint32),
+            #('DMA_cycles',uint32),
+            #('opcode',uint8),
+            #('STACK',uint8[:]),
+            #('ZN_Table',uint8[:]),
+            #('memory',CPU_Memory_type),
+            #('RAM',uint8[:,:]),
+            #('bank0',uint8[:]),
+            #('Sound',uint8[:]),
             #('NewMapperWriteFlag',uint8),
             #('isMapperWrite',uint8),
             #('MapperWriteData',uint8),
             #('MapperWriteAddress',uint16),
-            ('FrameFlag',uint8),
-            ('isDraw',uint8),
-            ('Frames',uint32),
+            #('FrameFlag',uint8),
+            #('isDraw',uint8),
+            #('Frames',uint32),
             #('PPU',PPU_type),
-            ('RenderMethod',uint8),
-            ('ChannelWrite',uint8[:]),
+            #('RenderMethod',uint8),
+            #('ChannelWrite',uint8[:]),
             #('MAPPER',MAPPER),
-            ('JOYPAD',JOYPAD_type),
-            ('Running',uint8),
-            ('addrmode',uint8[:]),
-            ('instructions',uint8[:]),
-            ('Ticks',uint8[:])#,
+            #('JOYPAD',JOYPAD_type),
+            #('Running',uint8),
+            #('addrmode',uint8[:]),
+            #('instructions',uint8[:]),
+            #('Ticks',uint8[:])#,
 
             ]
 ChannelWrite = np.zeros(0x4,np.uint8)
@@ -118,7 +118,7 @@ ChannelWrite = np.zeros(0x4,np.uint8)
 #@jitclass
 class CPU6502(object):
     'Registers & tempregisters'
-    '''PC:uint16
+    PC:uint16
     A: uint8
     X: uint8
     Y: uint8
@@ -138,34 +138,25 @@ class CPU6502(object):
     TOTAL_cycles: uint32
     DMA_cycles: uint32
     opcode: uint8
-    STACK: uint8[:]
     ZN_Table: uint8[:]
-    memory: CPU_Memory
-    RAM: uint8[:,:]
-    bank0: uint8[:]
-    Sound: uint8[:]
-    #NewMapperWriteFlag: uint8
-    #isMapperWrite: uint8
-    #MapperWriteData: uint8
-    #MapperWriteAddress: uint16
+    
     FrameFlag: uint8
     Frames: uint32
-    PPU: PPU
+    #PPU: PPU
     RenderMethod: uint8
     ChannelWrite: uint8[:]
-    MAPPER: MAPPER
+    
     JOYPAD: JOYPAD
     Running: uint8
-    addrmode: uint8[:]
-    instructions: uint8[:]
-    Ticks: uint8[:]
+
+
     '32bit instructions are faster in protected mode than 16bit'
-'''
+
     MAPPER: MAPPER
     
     def __init__(self,
                  MAPPER,# = MAPPER(),
-                 memory = MMU(),
+                 MMU = MMU(),
                  PPU = PPU(),
                  ChannelWrite = ChannelWrite,
                  reg = CPU_Reg(),
@@ -199,24 +190,11 @@ class CPU6502(object):
         for i in range(1,256):
             self.ZN_Table[i] = N_FLAG if i&0x80 else 0
 
-        self.memory = CPU_Memory(memory)
-        self.RAM = self.memory.RAM
-        self.bank0 = self.RAM[0]
-        #self.bank6 = self.RAM[3]
-        #self.bank8 = self.RAM[4]
-        #self.bankA = self.RAM[5]
-        #self.bankC = self.RAM[6]
-        #self.bankE = self.RAM[7]
+        self.MMU = MMU
 
-        self.STACK = self.memory.RAM[0][0x100:0x200]
-        
-        self.Sound = self.memory.RAM[2][0:0x100]
         
         #self.debug = 0
-        #self.NewMapperWriteFlag = 0
-        #self.isMapperWrite = 0
-        #self.MapperWriteData =  0
-        #self.MapperWriteAddress = 0
+
 
         self.FrameFlag = 0
         self.isDraw = 0
@@ -237,15 +215,19 @@ class CPU6502(object):
         self.Running = 1
         
 
-    '''
-    def SET_NEW_MAPPER_TRUE(self):
-        self.NewMapperWriteFlag = 1
-    def SET_NEW_MAPPER_FALSE(self):
-        self.NewMapperWriteFlag = 0
     @property
-    def GET_NEW_MAPPER(self):
-        return self.NewMapperWriteFlag
-        '''
+    def RAM(self):
+        return self.MMU.RAM
+    @property
+    def bank0(self):
+        return self.RAM[0]
+    @property
+    def STACK(self):
+        return self.bank0[0x100:0x200]
+    @property
+    def Sound(self):
+        return self.MMU.RAM[2][0:0x100]
+    
         
     @property
     def CpuClock(self):
@@ -549,10 +531,10 @@ class CPU6502(object):
 
 
     '/* CMP (N-----ZC) */'
-    def	CMP(self): 				\
-        self.WT = self.A - self.DT;				\
-        self.TST_FLAG( (self.WT&0x8000)==0, C_FLAG );	\
-        self.SET_ZN_FLAG( self.WT );		\
+    def	CMP(self): 				
+        self.WT = self.A - self.DT;				
+        self.TST_FLAG( (self.WT&0x8000)==0, C_FLAG )	
+        self.SET_ZN_FLAG( self.WT )		
     
     '/* CPX (N-----ZC) */'
     def	CPX(self):			\
@@ -2189,7 +2171,7 @@ def import_CPU_class(addition_spec, jit = True):
 def load_CPU(consloe, addition_spec,jit = True):
     cpu_class, cpu_type = import_CPU_class(addition_spec,jit = jit)
     cpu = cpu_class(MAPPER = consloe.MAPPER,
-                        memory = consloe.MMU,
+                        MMU = consloe.MMU,
                         PPU = consloe.PPU,
                         ChannelWrite = consloe.APU.ChannelWrite)#, #consloe.APU,)
     return cpu, cpu_type

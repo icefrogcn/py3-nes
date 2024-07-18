@@ -317,22 +317,7 @@ def load_MMC(MMU = MMU(), jit = True):
     mmc = mmc_class(MMU)
     return mmc, mmc_type
 
-def import_MAPPER(mapper = 0, jit = True):
-    mapper_mod = __import__('mappers.mapper%d' %mapper, fromlist=['MAPPER','mapper_spec'])
 
-    return jitObject(mapper_mod.MAPPER, mapper_mod.mapper_spec, MMC_spec(), jit = jit) 
-
-def load_MAPPER(consloe, jit = True):
-    mapper_class, mapper_type = import_MAPPER(mapper = consloe.ROM.Mapper, jit = jit)
-
-    mapper = mapper_class(MMC(consloe.ROM, consloe.MMU))
-    return mapper, mapper_type
-
-def SetVRAM_1K_Bank(c, page, bank):
-        #print "Set VRAM"
-        #bank &= 0x3
-        ptr = 0x0400 * (bank & 0x3)
-        c.PPU_MEM_BANK[page] = c.VRAM[ptr:ptr+0x400]
         
 if __name__ == '__main__':
     #mapper = import_MAPPER()
