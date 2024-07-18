@@ -36,7 +36,6 @@ def rom_ok(data):
     else:
         return False
 
-print('loading ROM CLASS')
 
 @jitclass
 class ROM(object):
@@ -136,6 +135,7 @@ class ROM(object):
     def ROMCtrl2(self):
         return self.data[7]
 
+print('loading ROM CLASS')
 
 
 

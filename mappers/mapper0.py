@@ -6,12 +6,15 @@ from numba import int8,uint8,int16,uint16,uint32
 import numba as nb
 import numpy as np
 
+import spec
+
+from mmc import MMC
 
 
 mapper_spec = []
-#@jitclass
+@jitclass
 class MAPPER:
-    #MMC: MMC
+    MMC: MMC
     #RenderMethod: uint8
     
     def __init__(self,MMC):
@@ -36,8 +39,8 @@ class MAPPER:
             self.MMC.SetPROM_32K_Bank( 0,1,2,3 )
         #print "RESET SUCCESS MAPPER ", self.Mapper
 
-    def Write(self,address,data):
-        pass
+    #def Write(self,address,data):
+        #pass
     def ReadLow(self,address):#$4100-$7FFF Lower Memory read
         return self.MMC.ReadLow(address)
 
@@ -56,7 +59,6 @@ class MAPPER:
 
 
 if __name__ == '__main__':
-    from . import mmc
     mapper = MAPPER(MMC())
     print(mapper)
 

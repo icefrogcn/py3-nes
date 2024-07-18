@@ -28,6 +28,7 @@ from cpu_memory import CPU_Memory
 
 #from apu import APU#,APU_type
 from ppu import PPU
+from mapper import MAPPER
 from joypad import JOYPAD
 
 
@@ -91,11 +92,12 @@ cpu_spec = [('PC',uint16),
             ('RAM',uint8[:,:]),
             ('bank0',uint8[:]),
             ('Sound',uint8[:]),
-            ('NewMapperWriteFlag',uint8),
-            ('isMapperWrite',uint8),
-            ('MapperWriteData',uint8),
-            ('MapperWriteAddress',uint16),
+            #('NewMapperWriteFlag',uint8),
+            #('isMapperWrite',uint8),
+            #('MapperWriteData',uint8),
+            #('MapperWriteAddress',uint16),
             ('FrameFlag',uint8),
+            ('isDraw',uint8),
             ('Frames',uint32),
             #('PPU',PPU_type),
             ('RenderMethod',uint8),
@@ -142,10 +144,10 @@ class CPU6502(object):
     RAM: uint8[:,:]
     bank0: uint8[:]
     Sound: uint8[:]
-    NewMapperWriteFlag: uint8
-    isMapperWrite: uint8
-    MapperWriteData: uint8
-    MapperWriteAddress: uint16
+    #NewMapperWriteFlag: uint8
+    #isMapperWrite: uint8
+    #MapperWriteData: uint8
+    #MapperWriteAddress: uint16
     FrameFlag: uint8
     Frames: uint32
     PPU: PPU
@@ -159,7 +161,8 @@ class CPU6502(object):
     Ticks: uint8[:]
     '32bit instructions are faster in protected mode than 16bit'
 '''
-
+    MAPPER: MAPPER
+    
     def __init__(self,
                  MAPPER,# = MAPPER(),
                  memory = MMU(),
@@ -210,12 +213,13 @@ class CPU6502(object):
         self.Sound = self.memory.RAM[2][0:0x100]
         
         #self.debug = 0
-        self.NewMapperWriteFlag = 0
-        self.isMapperWrite = 0
-        self.MapperWriteData =  0
-        self.MapperWriteAddress = 0
+        #self.NewMapperWriteFlag = 0
+        #self.isMapperWrite = 0
+        #self.MapperWriteData =  0
+        #self.MapperWriteAddress = 0
 
         self.FrameFlag = 0
+        self.isDraw = 0
         self.Frames = 0
 
         self.PPU = PPU
@@ -233,7 +237,7 @@ class CPU6502(object):
         self.Running = 1
         
 
-
+    '''
     def SET_NEW_MAPPER_TRUE(self):
         self.NewMapperWriteFlag = 1
     def SET_NEW_MAPPER_FALSE(self):
@@ -241,7 +245,7 @@ class CPU6502(object):
     @property
     def GET_NEW_MAPPER(self):
         return self.NewMapperWriteFlag
-        
+        '''
         
     @property
     def CpuClock(self):
@@ -826,8 +830,8 @@ class CPU6502(object):
         self.FrameFlag &= ~self.FrameRender
     def FrameSound_ZERO(self):
         self.FrameFlag &= ~self.FrameSound
-    def MapperWriteFlag_ZERO(self):
-        self.isMapperWrite = 0
+    #def MapperWriteFlag_ZERO(self):
+        #self.isMapperWrite = 0
 
     def EmulationCPU(self,basecycles):
         self.base_cycles += basecycles
@@ -860,13 +864,15 @@ class CPU6502(object):
             if self.isFrameRender:
                 self.FrameFlag &= ~self.FRAME_RENDER
                 return self.FRAME_RENDER
+            #if self.isDraw:
+                #continue
 
             if self.isFrameSound:
                 self.FrameFlag &= ~self.FrameSound
                 return self.FrameSound
                 
-            if self.isMapperWrite:
-                return self.FrameFlag
+            #if self.isMapperWrite:
+                #return self.FrameFlag
 
             if self.PPU.CurrentLine in (0,131):
                 self.FrameFlag |= self.FrameSound
@@ -875,11 +881,17 @@ class CPU6502(object):
                 if self.PPU.CurrentLine == 0:
                     if( self.RenderMethod < POST_RENDER ):
                         self.EmulationCPU(ScanlineCycles)
+                        self.PPU.FrameStart()
+                        self.PPU.ScanlineNext()
                         if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
+                        self.PPU.ScanlineStart()
                     else:
                         self.EmulationCPU(HDrawCycles)
+                        self.PPU.FrameStart()
+                        self.PPU.ScanlineNext()
                         if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
                         self.EmulationCPU(FETCH_CYCLES*32)
+                        self.PPU.ScanlineStart()
                         self.EmulationCPU( FETCH_CYCLES*10 + 4 )
                     
                 elif self.PPU.CurrentLine < 240:
@@ -887,10 +899,12 @@ class CPU6502(object):
                         if( self.RenderMethod == POST_ALL_RENDER ):
                             self.EmulationCPU(ScanlineCycles)
                         self.PPU.RenderScanline()
+                        self.PPU.ScanlineNext()
                         if( self.RenderMethod == PRE_ALL_RENDER ):
                             self.EmulationCPU(ScanlineCycles )
                             
                         if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
+                        self.PPU.ScanlineStart()
                     else:
                         if( self.RenderMethod == POST_RENDER ):
                             self.EmulationCPU(HDrawCycles)
@@ -899,13 +913,21 @@ class CPU6502(object):
                         if( self.RenderMethod == PRE_RENDER ):
                             self.EmulationCPU(HDrawCycles)
 
+                        self.PPU.ScanlineNext()
+
                         if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
                         self.EmulationCPU(FETCH_CYCLES*32)
+                        self.PPU.ScanlineStart()
                         self.EmulationCPU(FETCH_CYCLES*10 + 4 )
+
+
 
                     
                 elif self.PPU.CurrentLine == 240:
                     #mapper->VSync()
+                    self.FrameFlag |= self.FRAME_RENDER
+                    #self.isDraw = 1
+                    
                     if( self.RenderMethod == POST_RENDER ):
                         self.EmulationCPU(ScanlineCycles)
                         if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
@@ -913,15 +935,16 @@ class CPU6502(object):
                         self.EmulationCPU(HDrawCycles)
                         if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
                         self.EmulationCPU(HBlankCycles)
-                    
+                        
                     self.Frames += 1
                     
+                    
                 elif self.PPU.CurrentLine <= 261: #VBLANK
-
+                    self.isDraw = 0
                         
                     if self.PPU.CurrentLine == 261:
                         self.PPU.VBlankEnd()
-                        self.FrameFlag |= self.FRAME_RENDER
+                        #self.FrameFlag |= self.FRAME_RENDER
 
                     if( self.RenderMethod == POST_RENDER ):
                         if self.PPU.CurrentLine == 241:
@@ -1171,17 +1194,13 @@ class CPU6502(object):
     
     def MapperWrite(self,address, value):
         #print "MapperWrite"
-        if self.GET_NEW_MAPPER:
-            self.MAPPER.Write(address, value)
+        self.MAPPER.Write(address, value)
         #    exsound_enable =  self.MAPPER.Write(Address, value)
                 
         #    if exsound_enable:
         #        self.APU.ExWrite(Address, value)
                     
-        else:
-            self.isMapperWrite = 1
-            self.MapperWriteAddress = address
-            self.MapperWriteData = value
+
     
 
     def exec_opcode(self):
@@ -2177,17 +2196,10 @@ def load_CPU(consloe, addition_spec,jit = True):
 
 if __name__ == '__main__':
     #cpu_ram = Memory()
-    from mmc import CreateMapper
-
-    MAPPER,MAPPER_type = CreateMapper()
-    print(type(MAPPER))
-    print(dir(MAPPER))
-    #MAPPER_type = nb.deferred_type()
-    #MAPPER_type.define(MAPPER.class_type.instance_type)
-
-    #cpu_spec.append(('MAPPER',MAPPER_type))
-    cpu6502 = jitObject(cpu6502, cpu_spec)
-    cpu = cpu6502(MAPPER = MAPPER())
+    
+    #cpu6502 = jitObject(cpu6502, cpu_spec)
+    
+    cpu = CPU6502(MAPPER = MAPPER())
     print(cpu.CpuClock)
     
         

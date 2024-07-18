@@ -1,9 +1,8 @@
 # -*- coding: UTF-8 -*-
 import sys
+sys.path.append("./mappers")
 
-__all__ = ['main',
-           'cart',
-           'mapper0',
+__all__ = ['mapper0',
            'mapper1',
            'mapper2',
            'mapper3',
@@ -12,8 +11,6 @@ __all__ = ['main',
            'mapper23',
            'mapper73'
            ]
-
-
 
 
 

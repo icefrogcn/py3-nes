@@ -27,6 +27,8 @@ import rom
 from rom import nesROM
 from rom import get_Mapper_by_fn
 
+from mmc import MMC
+from mapper import MAPPER
 
 from cpu6502_opcodes import init6502
 
@@ -38,7 +40,6 @@ from cpu6502_opcodes import init6502
 
 from apu import APU
 from joypad import JOYPAD
-#import mappers
 #from mappers.main import cartridge, cartridge_spec
 
 from vbfun import MemCopy
@@ -128,8 +129,8 @@ class CONSLOE():
         Log_SYS('loading CPU CLASS')
         from cpu import load_CPU
         addition_spec = {
-            'PPU': self.PPU_type,
-            'MAPPER':self.MAPPER_type
+            'PPU': self.PPU_type#,
+            #'MAPPER':self.MAPPER_type
             }
         self.CPU, self.CPU_type = load_CPU(self, addition_spec, jit = self.jit)
         Log_SYS('init CPU')
@@ -149,17 +150,18 @@ class CONSLOE():
         init6502()
 
         try:
-            self.Load_MAPPER()
-            
+            #self.Load_MAPPER()
+            self.MMC = MMC(self.ROM,self.MMU)
+            self.MAPPER = MAPPER(self.MMC)
             self.Load_PPU()
             self.Load_CPU()
             
-            self.CPU.SET_NEW_MAPPER_TRUE()
-            self.CPU.MAPPER.reset()
-            self.CPU.MAPPER.MMC.reset()
+            
+            self.MMC.reset()
+            self.MAPPER.reset()
             
             LoadNES = 1
-            Log_SYS("NEW MAPPER process")
+            #Log_SYS("NEW MAPPER process")
 
 
         except:
@@ -201,6 +203,8 @@ class CONSLOE():
 
         self.ScreenShow()
 
+        #self.thread_show(target = self.blitFrame_thread)
+        
         self.run()
 
         self.PowerOFF()
@@ -228,6 +232,8 @@ class CONSLOE():
                 #Log_HW('Play Sound')
                 self.APU.updateSounds(self.CPU.Frames)
                 #self.SaveSounds()
+
+
             
             if Flag == self.CPU.FRAME_RENDER:
                 #self.CPU.FrameRender_ZERO()
@@ -242,12 +248,12 @@ class CONSLOE():
                 if self.CPU.Frames % wish_fps == wish_fps - 1:
                     blit_delay = 0
                 start = time.time()
+            
 
-
-    
                 self.Running = JOYPAD_CHK(self.CPU)
 
-                self.Cheat()
+                self.Cheat()   
+
 
 
     def SaveSounds(self):
@@ -295,19 +301,22 @@ class CONSLOE():
                         self.blitPal()
 
     def blitFrame_thread(self):
-
-            print ('blitFrame: ',self.CPU.Frames)
-            if self.CPU.Frames:
-                self.FrameBuffer = paintBuffer(self.PPU.NTArray,self.PPU.Pal,self.PPU.Palettes)
+        while self.Running:
+            #print('blit thread',self.CPU.isDraw,self.CPU.Frames,self.CPU.clockticks6502)
+            if self.CPU.isDraw:
+                self.CPU.isDraw = 0
+                print ('blitFrame: ',self.CPU.Frames)
+                self.PPU.RenderFrame()
                 
-                if self.debug == False and self.PPU_render:
-                    pass
-                    self.blitScreen()
-                    self.blitPal()
-                    
+                if self.debug:
+                        pass
+                        self.blitVRAM()
+                        self.blitPal()
+                        #self.batch.draw()
                 else:
-                    self.blitVRAM()
-                    self.blitPal()
+                        self.blitScreen()
+                        self.blitPal()
+                
             
     def ScreenShow(self):
         if self.PPU_Running == 0:

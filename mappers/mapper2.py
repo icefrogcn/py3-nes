@@ -7,15 +7,17 @@ from numba import int8,uint8,int16,uint16,uint32
 import numba as nb
 import numpy as np
 
+import spec
+from mmc import MMC
 mapper_spec = []
 
-#@jitclass
+@jitclass
 class MAPPER(object):
-    #cartridge: MAPPER
+    MMC: MMC
     #RenderMethod: uint8
 
     
-    def __init__(self,MMC):
+    def __init__(self,MMC = MMC()):
         self.MMC = MMC
         
 
@@ -50,9 +52,9 @@ class MAPPER(object):
 
 
 if __name__ == '__main__':
-    sys.path.append('..')
-    from mmc import MMC
-    mapper = MAPPER(MMC())
+    #sys.path.append('..')
+    #from mmc import MMC
+    mapper = MAPPER()
     print(mapper)
 
 

@@ -5,14 +5,15 @@ from numba import int8,uint8,int16,uint16,uint32
 import numba as nb
 import numpy as np
 
-from main import MAPPER,MAIN_class_type
+import spec
 
-spec = [('cartridge',MAIN_class_type)
-        ]
-@jitclass(spec)
+from mmc import MMC
+
+@jitclass
 class MAPPER(object):
-
-    def __init__(self,cartridge = MAPPER()):
+    MMC: MMC
+    
+    def __init__(self,cartridge = MMC()):
         self.cartridge = cartridge
 
     def reset(self):
@@ -40,8 +41,7 @@ class MAPPER(object):
         if addr == 0xF000:
             self.cartridge.SetPROM_16K_Bank(4, data )
 
-MAPPER_type = nb.deferred_type()
-MAPPER_type.define(MAPPER.class_type.instance_type)
+
 
 if __name__ == '__main__':
     mapper = MAPPER()

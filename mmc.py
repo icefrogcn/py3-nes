@@ -31,39 +31,26 @@ TILE_RENDER     = 4
 
 
 
-MMC_spec = [('ROM',ROM), \
-           ('PROM_SIZE_array',uint8[:]), \
-           ('VROM_SIZE_array',uint8[:]), \
-           ('PRGRAM',uint8[:,:]), \
-           ('VRAM',uint8[:,:]), \
-           ('PROM',uint8[:]), \
-           ('VROM',uint8[:]), \
-           ('RenderMethod',uint8)
-           ]
-
-
-
 @jitclass
 class MMC(object):
     
     ROM: ROM
-    PRGRAM: uint8[:,:]
     MMU:MMU
 
 
     RenderMethod: uint8
     
-    def __init__(self, ROM = ROM(), memory = MMU()):
+    def __init__(self, ROM = ROM(), MMU = MMU()):
 
         self.ROM = ROM
 
-        self.PRGRAM = memory.RAM
-        #self.VRAM = memory.VRAM
-        self.MMU = memory
-        #self.PPU_MEM_BANK = memory.PPU_MEM_BANK
-
+        self.MMU = MMU
+        
         self.RenderMethod = POST_ALL_RENDER
 
+    @property
+    def RAM(self):
+        return self.MMU.RAM
     
     @property
     def VRAM_HMIRROR(self):
@@ -169,17 +156,17 @@ class MMC(object):
         pass
 
     def Read(self,address):#$8000-$FFFF Memory read(Dummy)
-        return self.PRGRAM[addr>>13,address & 0x1FFF]
+        return self.RAM[address>>13,address & 0x1FFF]
 
     def ReadLow(self,address):#$4100-$7FFF Lower Memory read
         if( address >= 0x6000 ):
-            return self.PRGRAM[3, address & 0x1FFF]
+            return self.RAM[3, address & 0x1FFF]
         return address>>8
 
     def WriteLow(self,address,data): #$4100-$7FFF Lower Memory write
         #$6000-$7FFF WRAM
         if( address >= 0x6000 ) :
-            self.PRGRAM[3, address & 0x1FFF] = data
+            self.RAM[3, address & 0x1FFF] = data
     
     def ExRead(self,address): #$4018-$40FF Extention register read/write
         return 0
@@ -196,7 +183,7 @@ class MMC(object):
     def SetPROM_8K_Bank(self, page, bank):
         
         bank %= self.ROM.PROM_8K_SIZE
-        self.PRGRAM[page] = self.PROM[0x2000 * bank : 0x2000 * bank + 0x2000]
+        self.RAM[page] = self.PROM[0x2000 * bank : 0x2000 * bank + 0x2000]
 
         
             
