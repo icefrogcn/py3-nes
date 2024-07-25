@@ -21,12 +21,14 @@ import numba as nb
 from deco import *
 from wrfilemod import read_file_to_array
 
+Log_SYS('import MMU class')
 from mmu import MMU
-
+Log_SYS('import ROM class')
 import rom
 from rom import nesROM
 from rom import get_Mapper_by_fn
 
+Log_SYS('import MAPPER class')
 from mmc import MMC
 from mapper import MAPPER
 
@@ -34,15 +36,9 @@ from cpu6502_opcodes import init6502
 
 
 
-
-
-
-
 from apu import APU
 from joypad import JOYPAD
 #from mappers.main import cartridge, cartridge_spec
-
-from vbfun import MemCopy
 
 
 
@@ -175,12 +171,12 @@ class CONSLOE():
             return False
 
  
-        Log_SYS("Successfully loaded %s" %self.nesROM.filename)
+        Log_SYS("Successfully loaded ROM")
         
         self.start = time.time()
         self.totalFrame = 0
 
-        #self.PPU.ScrollToggle = 1
+        
         self.PowerON()
         
         
@@ -295,6 +291,7 @@ class CONSLOE():
                         pass
                         self.blitVRAM()
                         self.blitPal()
+                        self.blitScreen()
                         #self.batch.draw()
                     else:
                         self.blitScreen()
@@ -312,6 +309,7 @@ class CONSLOE():
                         pass
                         self.blitVRAM()
                         self.blitPal()
+                        self.blitScreen()
                         #self.batch.draw()
                 else:
                         self.blitScreen()
@@ -336,6 +334,7 @@ class CONSLOE():
             cv2.namedWindow('PatternTable0', cv2.WINDOW_NORMAL)
             cv2.namedWindow('PatternTable1', cv2.WINDOW_NORMAL)
             cv2.namedWindow('Nametable', cv2.WINDOW_NORMAL)
+            cv2.namedWindow('Main', cv2.WINDOW_NORMAL)
         #cv2.namedWindow('PatternTable2', cv2.WINDOW_NORMAL)
         #cv2.namedWindow('PatternTable3', cv2.WINDOW_NORMAL)
     def ShutDown(self):
@@ -343,9 +342,7 @@ class CONSLOE():
             cv2.destroyAllWindows()
         if self.APU.available_ports:
             self.APU.midiout.close_port()
-        del self.CPU
-        del self.PPU
-        del self.MAPPER
+        
             
     def blitScreen(self):
         cv2.imshow("Main", paintBuffer(self.PPU.ScreenArray,self.PPU.Pal,self.PPU.Palettes))
@@ -434,14 +431,7 @@ def paintBuffer(FrameBuffer,Pal,Palettes):
             img[i, j] = Pal[Palettes[FrameBuffer[i, j]]]
     return img
     
-def show_rom_info(ROM):
-    print ("[ " , ROM.PrgCount , " ] 16kB ROM Bank(s)")
-    print ("[ " , ROM.ChrCount , " ] 8kB CHR Bank(s)")
-    print ("[ " , ROM.ROMCtrl , " ] ROM Control Byte #1")
-    print ("[ " , ROM.ROMCtrl2 , " ] ROM Control Byte #2")
-    print ("[ " , ROM.Mapper , " ] Mapper")
-    print ("Mirroring=" , ROM.Mirroring , " Trainer=" , ROM.Trainer , " FourScreen=" , ROM.FourScreen , " SRAM=" , ROM.UsesSRAM)
-    
+
 
 ROMS_DIR = os.getcwd()+ '\\roms\\'
 #ROMS_DIR = 'F:\\individual_\\Amuse\\EMU\FCSpec\\'
@@ -496,7 +486,7 @@ if __name__ == '__main__':
     #run(debug = True)
     ROMS = roms_list()
     ROMS_INFO = get_roms_mapper(ROMS)
-    fc = CONSLOE(True,jit = 0)
+    fc = CONSLOE(True,jit = 1)
 
     while True:
         show_choose(ROMS_INFO)
