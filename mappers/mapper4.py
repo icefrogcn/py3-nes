@@ -8,6 +8,8 @@ from numba import int8,uint8,int16,uint16,uint32
 import numba as nb
 import numpy as np
 
+import spec
+from mmc import MMC
 
 MMC3_IRQ_KLAX = 1
 MMC3_IRQ_SHOUGIMEIKAN = 2
@@ -29,11 +31,31 @@ mapper_spec = [#('MMC',MAIN_class_type),
         ('scanline',uint16),
         ('RenderMethod',uint8)
         ]
-#@jitclass(spec)
-class MAPPER(object):
+@jitclass
+class MAPPER():
+    MMC: MMC
 
+    reg:uint8[:]
+    prg0:uint8
+    prg1:uint8
+    chr01:uint8
+    chr23:uint8
+    chr4:uint8
+    chr5:uint8
+    chr6:uint8
+    chr7:uint8
+    we_sram:uint8
+    irq_type:uint8
+    irq_enable:uint8
+    irq_counter:uint8
+    irq_latch:uint8
+    irq_request:uint8
+    irq_preset:uint8
+    irq_preset_vbl:uint8
+    scanline:uint16
+    RenderMethod:uint8
 
-    def __init__(self,MMC):
+    def __init__(self,MMC = MMC()):
         self.MMC = MMC
 
         self.reg = np.zeros(0x8, np.uint8)
@@ -86,11 +108,6 @@ class MAPPER(object):
         
         return 1
 
-    def WriteLow(self,address,data):
-        self.MMC.WriteLow(address,data)
-
-    def ReadLow(self,address):
-        return self.MMC.ReadLow(address)
 
     def Write(self,address,data):#$8000-$FFFF Memory write
         addr = address & 0xE001
@@ -131,9 +148,9 @@ class MAPPER(object):
         elif addr == 0xA000:
             self.reg[2] = data
             if data & 0x01:
-                self.MMC.Mirroring_W(0)
+                self.MMC.Mirroring = 0
             else:
-                self.MMC.Mirroring_W(1)
+                self.MMC.Mirroring = 1
                 #elif data == 2:self.MMC.Mirroring_W(3) #VRAM_MIRROR4L
                 #else:self.MMC.Mirroring_W(4) #VRAM_MIRROR4H
                 #print "Mirroring",NES.Mirroring
@@ -225,9 +242,9 @@ class MAPPER(object):
 
 
 if __name__ == '__main__':
-    sys.path.append('..')
-    from mmc import MMC
-    mapper = MAPPER(MMC())
+    #sys.path.append('..')
+    #from mmc import MMC
+    mapper = MAPPER()
     print(mapper)
 
 

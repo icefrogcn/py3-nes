@@ -17,8 +17,6 @@ import traceback
 from deco import *
 from jitcompile import jitObject
          
-#import memory
-from nes import NES
 
 from mmc import *
 
@@ -61,55 +59,10 @@ CPU_Memory_type = nb.deferred_type()
 CPU_Memory_type.define(CPU_Memory.class_type.instance_type)
 CPU_Reg_type = nb.deferred_type()
 CPU_Reg_type.define(CPU_Reg.class_type.instance_type)
-#PPU_type = nb.deferred_type()
-#PPU_type.define(PPU.class_type.instance_type)
-JOYPAD_type = nb.deferred_type()
-JOYPAD_type.define(JOYPAD.class_type.instance_type)
 
-cpu_spec = [#('PC',uint16),
-            #('A',uint8),
-            #('X',uint8),
-            #('Y',uint8),
-            #('S',uint8),
-            #('P',uint16),
-            #('reg',CPU_Reg_type),
-            #('INT_pending',uint8),
-            #('nmicount',int16),
-            #('DT',uint8),
-            #('WT',uint16),
-            #('EA',uint16),
-            #('ET',uint16),
-            #('clockticks6502',uint32),
-            #('exec_cycles',uint8),
-            #('emul_cycles',uint64),
-            #('base_cycles',uint64),
-            #('TOTAL_cycles',uint32),
-            #('DMA_cycles',uint32),
-            #('opcode',uint8),
-            #('STACK',uint8[:]),
-            #('ZN_Table',uint8[:]),
-            #('memory',CPU_Memory_type),
-            #('RAM',uint8[:,:]),
-            #('bank0',uint8[:]),
-            #('Sound',uint8[:]),
-            #('NewMapperWriteFlag',uint8),
-            #('isMapperWrite',uint8),
-            #('MapperWriteData',uint8),
-            #('MapperWriteAddress',uint16),
-            #('FrameFlag',uint8),
-            #('isDraw',uint8),
-            #('Frames',uint32),
-            #('PPU',PPU_type),
-            #('RenderMethod',uint8),
-            #('ChannelWrite',uint8[:]),
-            #('MAPPER',MAPPER),
-            #('JOYPAD',JOYPAD_type),
-            #('Running',uint8),
-            #('addrmode',uint8[:]),
-            #('instructions',uint8[:]),
-            #('Ticks',uint8[:])#,
 
-            ]
+cpu_spec = []
+
 ChannelWrite = np.zeros(0x4,np.uint8)
 
 
@@ -139,8 +92,10 @@ class CPU6502(object):
     DMA_cycles: uint32
     opcode: uint8
     ZN_Table: uint8[:]
-    
+
+    MMU:MMU
     FrameFlag: uint8
+    isDraw:uint8
     Frames: uint32
     #PPU: PPU
     RenderMethod: uint8

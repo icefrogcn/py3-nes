@@ -105,9 +105,10 @@ class MMC(object):
     @property
     def Mirroring(self):
         return self.ROM.Mirroring
-    @property
-    def MirrorXor(self):
-        return self.ROM.MirrorXor
+    @Mirroring.setter
+    def Mirroring(self,value):
+        self.ROM.Mirroring = value
+
 
     @property
     def PROM_8K_SIZE(self):
@@ -134,10 +135,8 @@ class MMC(object):
 
 
     
-    def MirrorXor_W(self,value):
-        self.ROM.MirrorXor_W(value)    
-    def Mirroring_W(self,value):
-        self.ROM.Mirroring_W(value)  
+
+
         
     def reset(self):
         if self.ROM.VROM_8K_SIZE:
@@ -322,7 +321,8 @@ def load_MMC(MMU = MMU(), jit = True):
 if __name__ == '__main__':
     #mapper = import_MAPPER()
     #print(mapper)
-    mmc = MMC(nesROM().LoadROM('roms//1944.nes'))
+    mmc = MMC(nesROM().LoadROM('roms//1942.nes'))
+    mmc.reset()
     
 
 

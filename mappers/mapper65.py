@@ -7,7 +7,6 @@ sys.path.append("..")
 #MAPPER
 from mapper import MAPPER
 
-from nes import NES
 
 
 class MAPPER(MAPPER,NES):
