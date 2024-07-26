@@ -10,8 +10,9 @@ import numba as nb
 
 #自定义类
 #from deco import *
-from wrfilemod import read_file_to_array
+#from wrfilemod import read_file_to_array
 
+from mmu import MMU
 
 @jitclass
 class ROM(object):
@@ -109,6 +110,16 @@ class ROM(object):
     @property
     def NESHEADER_SIZE(self):
         return 0x20
+    
+    def info(self):
+    
+        print ("[ " , self.PROM_16K_SIZE , " ] 16kB ROM Bank(s)")
+        print ("[ " , self.VROM_8K_SIZE , " ] 8kB CHR Bank(s)")
+        print ("[ " , self.ROMCtrl , " ] ROM Control Byte #1")
+        print ("[ " , self.ROMCtrl2 , " ] ROM Control Byte #2")
+        print ("[ " , self.Mapper , " ] Mapper")
+        print ("Mirroring =" , self.Mirroring , "Trainer =" , self.Trainer , "FourScreen =" , self.FourScreen , "SRAM =" , self.UsesSRAM , "")
+         
 
 
 class nesROM():
@@ -118,8 +129,9 @@ class nesROM():
 
 
     def LoadROM(self,filename):
-        
-        self.data = read_file_to_array(filename)
+
+        #self.data = np.array(read_file_to_array(filename),dtype=np.uint8)
+        self.data = np.fromfile(filename,dtype=np.uint8)
         
         if ''.join([chr(i) for i in self.data[:0x4]]) == 'NES\x1a':
             print(f'{filename} ROM OK!')
@@ -127,16 +139,16 @@ class nesROM():
             print(f'{filename} Invalid Header')
             return 0
         
-        self.ROM = ROM(np.array(self.data, np.uint8))
+        self.ROM = ROM(self.data)
 
-        self.ROM_info()
+        self.ROM.info()
         
         if self.ROM.Trainer:
             print ("Error: Trainer not yet supported.") #, VERSION
     
         return self.ROM
             
-    def ROM_info(self):
+    def info(self):
     
         print (f"[ {self.ROM.PROM_16K_SIZE:3} ] 16kB ROM Bank(s)")
         print (f"[ {self.ROM.VROM_8K_SIZE:3} ] 8kB CHR Bank(s)")
@@ -146,10 +158,17 @@ class nesROM():
         print (f"Mirroring={self.ROM.Mirroring}  Trainer={self.ROM.Trainer}  FourScreen={self.ROM.FourScreen}  SRAM={self.ROM.UsesSRAM}")
          
 
+def calculate_Mapper(NESHEADER):
+    return  (NESHEADER[6] & 0xF0) // 16 + NESHEADER[7]
+
+def get_Mapper_by_fn(filename):
+    return calculate_Mapper(np.fromfile(filename,dtype=np.uint8))
+
+
 if __name__ == '__main__':
 
-    romt = nesROM().LoadROM('roms//Contra (J).nes')
-    print (dir(romt))
+    rom = nesROM().LoadROM('roms//Contra (J).nes')
+    print (dir(rom))
 
 
 
