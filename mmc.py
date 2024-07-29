@@ -19,8 +19,8 @@ import numba as nb
 
 from jitcompile import jitObject
 
-from rom import ROM ,nesROM
 from mmu import MMU
+from rom import ROM
 
 POST_ALL_RENDER = 0
 PRE_ALL_RENDER  = 1
@@ -34,20 +34,21 @@ TILE_RENDER     = 4
 @jitclass
 class MMC(object):
     
-    ROM: ROM
     MMU:MMU
-
+    ROM:ROM
 
     RenderMethod: uint8
     
-    def __init__(self, ROM = ROM(), MMU = MMU()):
-
-        self.ROM = ROM
+    def __init__(self, MMU = MMU()):
 
         self.MMU = MMU
+        self.ROM = self.MMU.ROM
         
         self.RenderMethod = POST_ALL_RENDER
 
+    #@property
+    #def ROM(self):
+    #    return self.MMU.ROM
     @property
     def RAM(self):
         return self.MMU.RAM
@@ -321,7 +322,8 @@ def load_MMC(MMU = MMU(), jit = True):
 if __name__ == '__main__':
     #mapper = import_MAPPER()
     #print(mapper)
-    mmc = MMC(nesROM().LoadROM('roms//1942.nes'))
+    from rom import ROM ,nesROM
+    mmc = MMC(MMU(nesROM().LoadROM('roms//1942.nes')))
     mmc.reset()
     
 

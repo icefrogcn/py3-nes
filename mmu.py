@@ -7,10 +7,12 @@ from numba.typed import Dict,List
 from numba.types import u1,u2,ListType
 from numba import types
 
+from rom import ROM
 
 @jitclass
 class MMU(object):
     RAM:uint8[:,:]
+    ROM:ROM
     
     PPU_MEM_BANK:ListType(u1[::1])
     PPU_MEM_TYPE:uint8[:]
@@ -26,9 +28,9 @@ class MMU(object):
     #ATArray:uint8[:,::1] #force array type C
     
     
-    def __init__(self):
+    def __init__(self,ROM = ROM()):
         self.RAM = np.zeros((8,0x2000), np.uint8)
-        
+        self.ROM = ROM
         self.CRAM = np.zeros(32*1024,np.uint8)
         self.VRAM = np.zeros(4*1024,np.uint8)
         self.PPU_MEM_BANK = List([np.zeros(0x400,np.uint8) for i in range(12)])

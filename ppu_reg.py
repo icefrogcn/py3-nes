@@ -11,7 +11,7 @@ from numba.typed import Dict
 from numba import types
 
 from mmu import MMU
-#from rom import ROM
+
 
 #PPU REGISTER
 
@@ -115,7 +115,7 @@ class PPUREG(object):
         
         #self.ROM = ROM
         
-        self.reg[9] = 1
+        self.ScrollToggle = 0
         self.loopy_x = 0
         self._loopy_v = 0
         self._loopy_t = 0
@@ -191,7 +191,10 @@ class PPUREG(object):
     def PPUCTRL(self):
         return self.reg[0]
     @PPUCTRL.setter
-    def PPUCTRL(self,value): 
+    def PPUCTRL(self,value):
+        # NT t:0001100 00000000 = d:00000011
+        self.loopy_t = (self.loopy_t & 0xF3FF)|((value & 0x03)<<10)
+        self.reg[12] = self.loopy_t
         self.reg[0] = value
 
     @property
@@ -203,7 +206,7 @@ class PPUREG(object):
         return self.PPUCTRL & PPU_SPTBL_BIT
         
     @property
-    def PPU_NAMETBL_BIT(self):
+    def PPU_NAMETBL(self):
         return self.PPUCTRL & PPU_NAMETBL_BIT
         
     @property       #2001
@@ -217,7 +220,7 @@ class PPUREG(object):
     def PPUSTATUS(self):        #2002
         ret = self.reg[2]
         #ret = (self.PPU7_Temp & 0x1F) | self.reg[2]
-        self.reg[9] = 1
+        self.ScrollToggle = 0
         #if ret & 0x80:
         #    self.reg[2] &= 0x60 #PPU_SPHIT_FLAG + PPU_SPMAX_FLAG
         self.reg[2] &= 0x7F # cleared vblank after reading $2002  ~self.bit.PPU_VBLANK_FLAG
@@ -248,7 +251,13 @@ class PPUREG(object):
         
     @property
     def ScrollToggle(self): #AddressIsHi #$2005-$2006 Toggle PPU56Toggle
-        return self.reg[9]
+        temp = self.reg[9]
+        self.reg[9] = 0 if self.reg[9] else 1
+        return temp
+    @ScrollToggle.setter
+    def ScrollToggle(self,value):
+        self.reg[9] = value
+        
     def ScrollToggle_W(self): 
         self.reg[9] = 0 if self.reg[9] else 1
     @property
@@ -269,18 +278,19 @@ class PPUREG(object):
 
 
     def PPUSCROLL_W(self,value):#2005
-        if self.ScrollToggle:
-            self.reg[10] = value
-            self.loopy_t = (self.loopy_t & 0xFFE0)|(value >> 3)
-            self.loopy_x = value & 0x07
-        else:
+        if self.ScrollToggle:       #w2
             self.reg[11] = value
             #tile Y t:0000001111100000=d:11111000
             self.loopy_t = (self.loopy_t & 0xFC1F)|((value & 0xF8) << 2)
             #scroll offset Y t:0111000000000000=d:00000111
-            self.loopy_t = (self.loopy_t & 0x8FFF)|((value & 0x07) << 12)
-            
-        self.ScrollToggle_W()
+            self.loopy_t = (self.loopy_t & 0x8FFF)|((value & 0x07) << 12)            
+        else:                       #w1
+            self.reg[10] = value
+            self.loopy_t = (self.loopy_t & 0xFFE0)|(value >> 3)
+            self.loopy_x = value & 0x07
+
+        self.reg[12] = self.loopy_t
+        #self.ScrollToggle_W()
         #self.reg[5] = value
         
     @property
@@ -293,22 +303,26 @@ class PPUREG(object):
     def loopy_v(self,value):
         self._loopy_v = value #reg[6] = value
     
-    def PPUADDR_W(self,value):
-        if self.reg[9]:
-            self.reg[12] = value << 8
-            self.loopy_t = (self.loopy_t & 0x00FF)|((value & 0x3F) << 8)
-        else:
+    def PPUADDR_W(self,value):  #2006 W
+        if self.ScrollToggle:   #w2
+            self.reg[12] = (self.reg[12] & 0xFF00) | value
             self.reg[6] = self.reg[12] | value
-            self.loopy_t = (self.loopy_t & 0x00FF) | value
+            self.loopy_t = (self.loopy_t & 0xFF00) | value
             self.loopy_v = self.loopy_t
-        self.ScrollToggle_W()
+        else:                   #w1
+            #self.reg[12] = value << 8
+            self.reg[12] = (self.reg[12] & 0xFF)|((value & 0x3F) << 8)
+            self.loopy_t = (self.loopy_t & 0x00FF)|((value & 0x3F) << 8)
+        #self.ScrollToggle_W()
         #self.reg[6] = value
         
     @property
     def PPUDATA(self):          #2007 R
         data = self.PPU7_Temp
         addr = self.reg[6] & 0x3FFF
+        vaddr = self.loopy_v & 0x3FFF
         self.reg[6] += 32 if self.reg[0] & 0x04 else 1
+        self.loopy_v += 32 if self.reg[0] & 0x04 else 1
         if(addr >= 0x3000):
             if addr >= 0x3F00:
                 data &= 0x3F
@@ -324,7 +338,9 @@ class PPUREG(object):
         #self.PPU7_Temp_W(value)
         #self.reg[6] &= 0x3FFF
         vaddr = self.reg[6] & 0x3FFF
+        vaddr = self.loopy_v & 0x3FFF
         self.reg[6] += 32 if self.reg[0] & 0x04 else 1
+        self.loopy_v += 32 if self.reg[0] & 0x04 else 1
                                         #PPU_INC32_BIT
         if vaddr >= 0x3000:
             if vaddr >= 0x3F00:

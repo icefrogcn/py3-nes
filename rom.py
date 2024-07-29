@@ -12,7 +12,6 @@ import numba as nb
 #from deco import *
 #from wrfilemod import read_file_to_array
 
-from mmu import MMU
 
 @jitclass
 class ROM(object):

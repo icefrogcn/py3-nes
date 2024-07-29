@@ -24,15 +24,20 @@ from wrfilemod import read_file_to_array
 Log_SYS('import MMU class')
 from mmu import MMU
 Log_SYS('import ROM class')
-import rom
 from rom import nesROM
 from rom import get_Mapper_by_fn
+
+Log_SYS('import CPU CLASS')
+from cpu import load_CPU
+
+Log_SYS('import PPU CLASS')
+from ppu import load_PPU        
 
 Log_SYS('import MAPPER class')
 from mmc import MMC
 from mapper import MAPPER
 
-from cpu6502_opcodes import init6502
+#from cpu6502_opcodes import init6502
 
 
 
@@ -56,8 +61,6 @@ class CONSLOE():
         CPURunning = 1
         FirstRead = 1
 
-        self.MMU = MMU()
-        self.RAM = self.MMU.RAM
     
         self.debug = debug
         self.jit = jit
@@ -74,6 +77,10 @@ class CONSLOE():
                
         #self.CPURunning = cpu6502.CPURunning
         
+    @property
+    def RAM(self):
+        return self.MMU.RAM
+
     @property
     def status(self):
         return "PC:%d,clockticks:%d PPUSTATUS:%d,Frames %d,CurrLine:%d a:%d X:%d Y:%d S:%d p:%d opcode:%d " %self.CPU.status
@@ -105,25 +112,23 @@ class CONSLOE():
     def initMIDI(self):
         pass
 
-
+    '''
     def Load_MAPPER(self):
         Log_SYS('loading MAPPER CLASS')
         from mmc import load_MAPPER
         self.MAPPER, self.MAPPER_type = load_MAPPER(self, jit = self.jit)
         Log_SYS('init MAPPER')
-    
+    '''
         
     def Load_PPU(self):
-        Log_SYS('loading PPU CLASS')
-        from ppu import load_PPU
+        Log_SYS('Load PPU')
         self.PPU, self.PPU_type = load_PPU(self.MMU, jit = self.jit)
         print(self.PPU)
         Log_SYS('init PPU')
         self.PPU.pPPUinit(self.PPU_Running,self.PPU_render,self.PPU_debug)
             
     def Load_CPU(self):
-        Log_SYS('loading CPU CLASS')
-        from cpu import load_CPU
+        Log_SYS('Load CPU')
         addition_spec = {
             'PPU': self.PPU_type#,
             #'MAPPER':self.MAPPER_type
@@ -134,21 +139,19 @@ class CONSLOE():
 
     
     def StartingUp(self):
-        Log_SYS('RESET')
-        self.MMU.reset()
-        #self.memory.RAM[::] = 0
-        #self.memory.VRAM[::] = 0
-        #self.memory.SpriteRAM[:] = 0
-        
-        Log_SYS('init APU')
-        self.APU = APU(self.MMU)
-        
-        init6502()
 
         try:
-            #self.Load_MAPPER()
-            self.MMC = MMC(self.ROM,self.MMU)
+            self.MMU = MMU(self.ROM)
+            Log_SYS('RESET')
+            self.MMU.reset()
+            print(self.MMU)
+            Log_SYS('init APU')
+            self.APU = APU(self.MMU)
+        
+            self.MMC = MMC(self.MMU)
+            print(self.MMC)
             self.MAPPER = MAPPER(self.MMC)
+            print(self.MAPPER)
             self.Load_PPU()
             self.Load_CPU()
             
@@ -331,8 +334,8 @@ class CONSLOE():
             
         else:
             cv2.namedWindow('Pal', cv2.WINDOW_NORMAL)
-            cv2.namedWindow('PatternTable0', cv2.WINDOW_NORMAL)
-            cv2.namedWindow('PatternTable1', cv2.WINDOW_NORMAL)
+            #cv2.namedWindow('PatternTable0', cv2.WINDOW_NORMAL)
+            #cv2.namedWindow('PatternTable1', cv2.WINDOW_NORMAL)
             cv2.namedWindow('Nametable', cv2.WINDOW_NORMAL)
             cv2.namedWindow('Main', cv2.WINDOW_NORMAL)
         #cv2.namedWindow('PatternTable2', cv2.WINDOW_NORMAL)
@@ -369,7 +372,7 @@ class CONSLOE():
         start = time.time()
         totalFrame = 0
         while self.Running:
-            time.sleep(2)
+            time.sleep(5)
             if self.CPU.Frames > 1 and self.CPU.Frames == totalFrame:break
             nowFrames = self.CPU.Frames
             duration = time.time() - start
@@ -379,8 +382,8 @@ class CONSLOE():
             print (self.PPU.VRAM)
             #cv2.setWindowTitle('Main',"%s %d %d %d"%(FPS,self.CPU.PPU.CurrentLine,self.CPU.PPU.vScroll,self.CPU.PPU.HScroll))
             self.realFrames = 0
-            print (FPS, nowFrames, self.CPU.FrameFlag,self.APU.ChannelWrite, self.CPU.clockticks6502)#,self.CPU.PPU.render,self.CPU.PPU.tilebased
-            print (self.PPU.Palettes)
+            print(FPS, nowFrames, self.CPU.FrameFlag,self.APU.ChannelWrite, self.CPU.clockticks6502)#,self.CPU.PPU.render,self.CPU.PPU.tilebased
+            Log_SYS(self.PPU.Palettes)
             
             totalFrame = nowFrames
         
@@ -418,6 +421,10 @@ def JOYPAD_CHK(CPU):
     if keyboard.is_pressed('0'):
         print ("turnoff")
         return 0
+    elif keyboard.is_pressed('1'):
+        print (fc.PPU.NTLine)
+    elif keyboard.is_pressed('2'):
+        print (fc.PPU.ATLine)
     else:
         return 1
     
