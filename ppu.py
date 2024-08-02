@@ -13,7 +13,7 @@ from numba import uint8,uint16
 
 #自定义类
 from deco import *
-from jitcompile import jitObject
+from jitcompile import jitObject,jitType
 
 from mmu import MMU
 
@@ -30,8 +30,8 @@ from renderer import lookup_l,lookup_h,lookup_NtAt
 
 #@jitclass
 class PPU(object):
-    reg:PPUREG
-
+    reg: PPUREG
+    
     loopy_y:uint16
     loopy_shift:uint16
     
@@ -44,11 +44,11 @@ class PPU(object):
     PatternTableTiles:uint8[:,:,::1]
     Pal:uint8[:,:]
 
-    ScreenArray:uint8[:,:]
+    ScreenArray:uint8[:,::1]
     ATarray:uint8[:,:]
     #NT_BANK:ListType(uint8[::1])
 
-    FrameBuffer:uint8[:,:,:]
+    FrameBuffer:uint8[:,:,::1]
     Running:uint8
     render:uint8
     tilebased:uint8
@@ -113,9 +113,6 @@ class PPU(object):
     def NT_BANK(self):
         return self.MMU.NT_BANK
 
-    @property
-    def NTnum(self):
-        return self.loopy_t >> 10 #self.reg.PPU_NAMETBL
 
     #@property
     #def ROM(self):
@@ -167,41 +164,56 @@ class PPU(object):
         self.CurrentLine += value
 
     @property
+    def NTnum(self):
+        #0 0yy NN YY YYY XXXXX
+        return (self.loopy_v & 0b0000110000000000) >> 10
+        #return self.reg.PPU_NAMETBL
+    @property
     def vScroll(self):
         return self.reg.vScroll
     @property
     def vRow(self):
-        return (self.vScroll + self.CurrentLine - 1) >> 3
+        return (self.loopy_v & 0b0000001111100000) >> 5 
+        #return (self.vScroll + self.CurrentLine - 1) >> 3
     @property
     def vCol(self):
-        return self.reg.vScroll
+        return self.loopy_v & 0b0000000000011111
+        #return self.reg.vScroll
     @property
     def TileY(self):
-        return (self.vScroll + self.CurrentLine - 1) & 0x7
+        return self.loopy_y#(self.loopy_t >> 12) & 0x7
+        #return (self.vScroll + self.CurrentLine - 1) & 0x7
+    @property
+    def TileX(self):
+        return self.loopy_x  & 0x7
+        
 
     @property
     def NT_addr(self):
-        return self.vRow << 5
+        return self.loopy_v & 0b0000001111111111
+        #return self.vRow << 5
         #return 0x400 * (self.NTnum ^ (0x2 if self.vRow > 30 else 0)) + (self.vRow << 5)
     @property
     def VRAM_BANK(self):
-        #return 8 | self.NTnum
-        return 8 | (self.NTnum ^ (0x2 if self.vRow > 30 else 0))
+        return 8 | self.NTnum#((self.loopy_v & 0b0000110000000000) >> 10) ^ self.NTnum
+        #return 8 | (self.NTnum ^ (0x2 if self.vRow > 30 else 0))
 
     @property
     def AT_addr(self):
-        return 0x3C0 + ((self.vRow <<1) & 0x38)
+        return 0x3C0 | ((self.loopy_v >> 4) & 0x38) | ((self.loopy_v >> 2) & 0x07)
         #return 0x400 * (self.NTnum ^ (0x2 if self.vRow > 30 else 0)) + 0x3C0 + ((self.vRow <<1) & 0x38)
 
 
     @property
     def NTLine(self):
         ptr = self.NT_addr
-        drift = ptr & 31
+        drift = self.vCol
         if drift:
-            print(ptr,drift)
-            #return np.concatenate(self.VRAM[ptr:ptr + 32 - drift],self.VRAM[ptr^0x400:(ptr^0x400) + drift])
-        return self.PPU_MEM_BANK[self.VRAM_BANK][ptr:ptr + 32]
+            pass
+            #print(ptr,drift)
+        return np.hstack((self.PPU_MEM_BANK[self.VRAM_BANK][ptr:ptr + 32 - drift],
+                          self.PPU_MEM_BANK[self.VRAM_BANK ^ 1][ptr - drift:ptr + 1]))
+        #return self.PPU_MEM_BANK[self.VRAM_BANK][ptr:ptr + 32]
 
 
     def GetPT_Tile_data(self,ptr):
@@ -215,7 +227,7 @@ class PPU(object):
 
     @property
     def RowNTTiles(self):
-        Tiles = np.zeros((8, 256),np.uint8)
+        Tiles = np.zeros((8, 264),np.uint8)
 
         for i,ptr in enumerate(self.NTLine):
             Tiles[0:8, i<<3: (i<<3) + 8] = self.Tile(self.GetPT_Tile_data(ptr))
@@ -228,12 +240,12 @@ class PPU(object):
         drift = ptr & 7
         if drift:
             pass
-        return self.PPU_MEM_BANK[self.VRAM_BANK][ptr:ptr + 8]#self.VRAM[ptr:ptr+8]
+        return np.hstack((self.PPU_MEM_BANK[self.VRAM_BANK][ptr:ptr + 8 - drift],
+                              self.PPU_MEM_BANK[self.VRAM_BANK ^ 1][ptr - drift:ptr + 1]))
+        #return self.PPU_MEM_BANK[self.VRAM_BANK][ptr:ptr + 8]#self.VRAM[ptr:ptr+8]
 
     
     def ATTile(self,data):
-        #Tile = np.zeros((32, 32),np.uint8)
-        #Tile = np.zeros((16, 16),np.uint8)
         Tile = np.zeros((8, 32),np.uint8)
         if self.vRow & 0b10:
             Tile[0:8,16:32] = (data & 0b11000000) >> 4
@@ -242,16 +254,12 @@ class PPU(object):
             Tile[0:8,16:32] = (data & 0b00001100)
             Tile[0:8,0 :16] = (data & 0b00000011) << 2
             
-        #for TileY in range(4):
-        #    Tile[0:16, 0:16] = (data & 0b11) << 2
-        #    Tile[16:32, 0:16] = (value & 0b110000) >> 2
-        #    Tile[0:16, 16:32] = (value & 0b1100)
-        #    Tile[16:32,16:32] = (value & 0b11000000) >> 4
+
         return Tile
 
     @property        
     def RowATTiles(self):
-        Tiles = np.zeros((8, 256),np.uint8)
+        Tiles = np.zeros((8, 288),np.uint8)
         for i,data in enumerate(self.ATLine):
             Tiles[0:8, i<<5: (i<<5) + 32] = self.ATTile(data)
         return Tiles
@@ -261,8 +269,8 @@ class PPU(object):
 
     
         
-    def RenderScanline(self):
-        if self.CurrentLine == 0:
+    def RenderScanline(self,scanline):
+        if scanline == 0:
             pass
             '''
             self.loopy_v0 = self.loopy_v
@@ -280,16 +288,15 @@ class PPU(object):
             #mapper->HSync( scanline )
             self.ScanlineStart()
             '''
-            self.scY = self.reg.vScroll + ((self.NTnum>>1) * 240)
-            self.scX = self.reg.HScroll + ((self.NTnum & 1) * 256)
+            if self.isDispON :
+                #self.ScreenArray[(self.vRow << 3)|self.TileY] = self.RowNTTiles[self.TileY]
+                #self.ScreenArray[(self.vRow << 3)|self.TileY] |= self.RowATTiles[self.TileY]
+                #self.ScreenArray[(self.vRow << 3)|self.TileY] = self.RowNTTiles[self.TileY]
+                #self.ScreenArray[(self.vRow << 3)|self.TileY] |= self.RowATTiles[self.TileY]
+                self.ScreenArray[scanline] = self.RowNTTiles[self.TileY][self.TileX:self.TileX+256]
+                self.ScreenArray[scanline] |= self.RowATTiles[self.TileY][self.TileX:self.TileX+256]
 
-            #RowTiles = np.zeros((8, 256),np.uint8)
-            #RowTiles =
-            
-            self.ScreenArray[self.CurrentLine-1] = self.RowNTTiles[self.TileY]
-            self.ScreenArray[self.CurrentLine-1] |= self.RowATTiles[self.TileY]
-
-        if self.CurrentLine > 239:return
+        if scanline > 239:return
         
         
         #if self.CurrentLine < 8 :
@@ -299,16 +306,16 @@ class PPU(object):
             #self.Status = self.Status | 0x80#PPU_VBLANK_FLAG
         #    self.reg.PPUSTATUS_W(self.reg.PPUSTATUS | 0x80) #PPU_VBLANK_FLAG
 
-        if self.CurrentLine > self.SpriteRAM[0] + 8:
-            self.reg.PPUSTATUS_W(self.reg.PPUSTATUS | 0x40)#PPU_SPHIT_FLAG
+        if scanline > self.SpriteRAM[0] + 8:
+            self.reg.PPUSTATUS = self.reg.PPUSTATUS | 0x40 #PPU_SPHIT_FLAG
 
-        if self.Running == 0:
-            if self.reg.PPUMASK & self.reg.bit.PPU_SPDISP_BIT == 0 :return
-            if self.reg.PPUSTATUS & 0x40 :return #PPU_SPHIT_FLAG
+        #if self.Running == 0:
+        #    if self.reg.PPUMASK & self.reg.bit.PPU_SPDISP_BIT == 0 :return
+        #    if self.reg.PPUSTATUS & 0x40 :return #PPU_SPHIT_FLAG
             
-            return
+        #    return
 
-        self.ScanlineSPHit[self.CurrentLine] =  1 if self.reg.PPUSTATUS & self.reg.bit.PPU_SPHIT_FLAG else 0
+        self.ScanlineSPHit[scanline] =  1 if self.reg.PPUSTATUS & self.reg.bit.PPU_SPHIT_FLAG else 0
 
         '''self.sp_h = 16 if self.Control1 & PPU_SP16_BIT else 8
 
@@ -340,25 +347,25 @@ class PPU(object):
     
     def ScanlineStart(self):
         if self.isDispON :
-            self.loopy_v = (self.loopy_v & 0xFBE0)|(self.loopy_t & 0x041F)
+            self.loopy_v = (self.loopy_v & 0xFBE0)|(self.loopy_t & 0x041F)  
             self.loopy_shift = self.loopy_x
             self.loopy_y = (self.loopy_v&0x7000)>>12
             #nes->mapper->PPU_Latch( 0x2000 + (loopy_v & 0x0FFF) );
                 
     def ScanlineNext(self):
         if self.isDispON:
-            if( (self.loopy_v & 0x7000) == 0x7000 ):
-                self.loopy_v &= 0x8FFF
-                if( (self.loopy_v & 0x03E0) == 0x03A0 ):
-                    self.loopy_v ^= 0x0800
+            if( (self.loopy_v & 0x7000) == 0x7000 ):            #FineY = 7
+                self.loopy_v &= 0x8FFF                          #FineY = 0
+                if( (self.loopy_v & 0x03E0) == 0x03A0 ):        #Row = 29 
+                    self.loopy_v ^= 0x0800                      #nt chg
                     self.loopy_v &= 0xFC1F
                 else:
-                    if( (self.loopy_v & 0x03E0) == 0x03E0 ):
+                    if( (self.loopy_v & 0x03E0) == 0x03E0 ):    #Row = 31
                         self.loopy_v &= 0xFC1F
                     else:
-                        self.loopy_v += 0x0020
+                        self.loopy_v += 0x0020                  #Row < 30 next Row
             else :
-                self.loopy_v += 0x1000
+                self.loopy_v += 0x1000                          #FineY += 1
 
             self.loopy_y = (self.loopy_v&0x7000)>>12
                     
@@ -397,15 +404,15 @@ class PPU(object):
         #coarseYscroll  = (self.loopy_v & 0x03FF) >> 5
         #coarseXscroll = self.loopy_v & 0x1F
 
-        if self.Mirroring:
+        #if self.Mirroring:
             #self.scY = (coarseYscroll << 3) + fineYscroll + ((NTnum>>1) * 240) 
             #self.scX = (coarseXscroll << 3)+ self.loopy_x0 #self.HScroll
-            self.scY = self.reg.vScroll + ((NTnum>>1) * 240)
-            self.scX = self.reg.HScroll + ((NTnum & 1) * 256)
+        self.scY = self.reg.vScroll + ((self.NTnum>>1) * 240)
+        self.scX = self.reg.HScroll + ((NTnum & 1) * 256)
             
-        if self.Mirroring == 0:
+       # if self.Mirroring == 0:
             #self.scY = (coarseYscroll << 3) + fineYscroll + ((NTnum>>1) * 240) #if self.loopy_v&0x0FFF else self.scY
-            self.scY = self.reg.vScroll + ((NTnum>>1) * 240) 
+            #self.scY = self.reg.vScroll + ((NTnum>>1) * 240) 
             
         
         self.RenderBG()
@@ -435,8 +442,8 @@ class PPU(object):
         return self.PPU_SPTBL_OFFSET >> 4
     
     def RenderSprites(self):
-        self.RenderSpriteArray(self.NTArray, self.SpriteRAM)
-         
+        self.RenderSpriteArray(self.NTArray[self.scY:self.scY + 240, self.scX:self.scX + 256], self.SpriteRAM)
+        self.RenderSpriteArray(self.ScreenArray, self.SpriteRAM) 
 
 
     #@njit
@@ -548,8 +555,8 @@ class PPU(object):
             spriteOffset =  spriteIndex * 4
             if SPRAM[spriteOffset] >= 240: continue
             
-            spriteY = SPRAM[spriteOffset] + self.scY
-            spriteX = SPRAM[spriteOffset + 3] + self.scX
+            spriteY = SPRAM[spriteOffset]# + self.scY
+            spriteX = SPRAM[spriteOffset + 3]# + self.scX
             
 
             
@@ -638,11 +645,12 @@ ppu_spec = [('CurrentLine',uint16),
     ]
 '''
 
-def import_PPU_class(jit = True):
+def jit_PPU_class(jit = 1):
     return jitObject(PPU, [], jit = jit)
 
-def load_PPU(MMU = MMU(), jit = True):
-    ppu_class, ppu_type = import_PPU_class(jit = jit)
+def load_PPU(MMU = MMU(), jit = 1):
+    ppu_class  = jit_PPU_class(jit = jit)
+    ppu_type = jitType(ppu_class)
     ppu = ppu_class(PPUREG(MMU))
     return ppu, ppu_type
     

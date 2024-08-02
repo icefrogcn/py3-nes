@@ -12,7 +12,7 @@ from numba.typed import Dict
 from numba import types
 
 from midiconstants import *
-from nes import NES
+
 from mmu import MMU
 
 # Volume adjust
@@ -71,15 +71,17 @@ spec = [('tones',float32[:]),
 print('loading APU CLASS')
 #@jitclass(spec)
 class APU(object):
-
-    def __init__(self,memory = MMU(), debug = False):
+    MMU:MMU
+    def __init__(self,MMU = MMU(), debug = False):
+        self.MMU = MMU
         self.tones = np.zeros(nVolumeChannel,np.float32)#[0] * 4
         self.volume = np.zeros(nVolumeChannel,np.uint16)#[0] * 4
         #self.v = np.zeros(0x4,np.uint16)#[0] * 4
         #self.Channel = np.zeros(0x4,np.uint16)#[0] * 4
         self.lastFrame = np.zeros(nVolumeChannel,np.uint16)#[0] * 4
         self.stopTones = np.zeros(nVolumeChannel,np.uint8)#[0] * 4
-        self.ChannelWrite = np.zeros(nVolumeChannel,np.uint8)#[0] * 4
+        #self.ChannelWrite = np.zeros(nVolumeChannel,np.uint8)#[0] * 4
+        self.ChannelWrite = MMU.ChannelWrite
         #self.SoundChannel = np.zeros(0x4,np.uint8)#np.zeros((0x4),dtype = "u1, f4, u1")
         
         #self.tonesBuffer = np.zeros(0x4,np.float32)#[0] * 4
@@ -92,8 +94,8 @@ class APU(object):
 
         self.Frames = 0
 
-        #self.RAM = memory.RAM
-        self.Sound = memory.RAM[2][0:0x100]
+        
+        self.Sound = MMU.RAM[2][0:0x100]
         #self.Sound = [0] * 0x16 #(0 To 0x15)
         #self.SoundCtrl = self.Sound[0x15]
         
@@ -469,7 +471,7 @@ def play_note(note, length, track, base_num=0, delay=0, velocity=1.0, channel=0)
 if __name__ == '__main__':
     print(getTone(300))
     apu = APU()
-    print(NES.pow2)
+    
     #apu.pAPUinit()
 
     note_on = [0x93, 60, 112] # channel 1, middle C, velocity 112

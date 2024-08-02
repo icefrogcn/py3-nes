@@ -15,17 +15,17 @@ import traceback
 
 #自定义类
 from deco import *
-from jitcompile import jitObject
+from jitcompile import jitObject,jitType
          
 
 from mmc import *
 
 from mmu import MMU
-from cpu_reg import CPU_Reg
-from cpu_memory import CPU_Memory
+#from cpu_reg import CPU_Reg
+#from cpu_memory import CPU_Memory
 
 #from apu import APU#,APU_type
-from ppu import PPU
+from ppu import PPU, load_PPU, jit_PPU_class
 from mapper import MAPPER
 from joypad import JOYPAD
 
@@ -55,15 +55,13 @@ FETCH_CYCLES = 8
 HDrawCycles = 1024
 HBlankCycles = 340
 
-CPU_Memory_type = nb.deferred_type()
-CPU_Memory_type.define(CPU_Memory.class_type.instance_type)
-CPU_Reg_type = nb.deferred_type()
-CPU_Reg_type.define(CPU_Reg.class_type.instance_type)
+#CPU_Memory_type = nb.deferred_type()
+#CPU_Memory_type.define(CPU_Memory.class_type.instance_type)
+#CPU_Reg_type = nb.deferred_type()
+#CPU_Reg_type.define(CPU_Reg.class_type.instance_type)
 
 
-cpu_spec = []
-
-ChannelWrite = np.zeros(0x4,np.uint8)
+#ChannelWrite = np.zeros(0x4,np.uint8)
 
 
 #print('loading CPU CLASS')  
@@ -77,7 +75,6 @@ class CPU6502(object):
     Y: uint8
     S: uint8
     P: uint16
-    reg: CPU_Reg
     INT_pending: uint8
     nmicount: int16
     DT: uint8
@@ -93,7 +90,6 @@ class CPU6502(object):
     opcode: uint8
     ZN_Table: uint8[:]
 
-    MMU:MMU
     FrameFlag: uint8
     isDraw:uint8
     Frames: uint32
@@ -106,20 +102,19 @@ class CPU6502(object):
 
 
     '32bit instructions are faster in protected mode than 16bit'
+    MMU:MMU
 
     MAPPER: MAPPER
+    #MMC: MMC
     
     def __init__(self,
-                 MAPPER,# = MAPPER(),
                  MMU = MMU(),
                  PPU = PPU(),
-                 ChannelWrite = ChannelWrite,
-                 reg = CPU_Reg(),
+                 #ChannelWrite = ChannelWrite,
                  JOYPAD = JOYPAD()
                  ):
 
         #self.AddressMask =0 #Long 'Integer
-        self.reg = reg
         self.PC = 0          
         self.A = np.uint8(0)           
         self.X = np.uint8(0)             
@@ -146,6 +141,7 @@ class CPU6502(object):
             self.ZN_Table[i] = N_FLAG if i&0x80 else 0
 
         self.MMU = MMU
+        self.MAPPER = MAPPER(MMC(self.MMU))
 
         
         #self.debug = 0
@@ -158,10 +154,9 @@ class CPU6502(object):
         self.PPU = PPU
         
         #self.APU = APU
-        self.ChannelWrite = ChannelWrite
+        self.ChannelWrite = self.MMU.ChannelWrite
 
-        self.MAPPER = MAPPER
-
+        
         self.JOYPAD = JOYPAD
 
         self.RenderMethod = self.MAPPER.RenderMethod
@@ -796,63 +791,63 @@ class CPU6502(object):
         return self.FrameFlag & self.FrameSound
 
     
-    def run6502(self):
+    def EmulateFrame(self):
+        scanline = 0
         while self.Running:
-            if self.isFrameRender:
-                self.FrameFlag &= ~self.FRAME_RENDER
-                return self.FRAME_RENDER
+            #if self.isFrameRender:
+            #    self.FrameFlag &= ~self.FRAME_RENDER
+            #    return self.FRAME_RENDER
             #if self.isDraw:
                 #continue
 
-            if self.isFrameSound:
-                self.FrameFlag &= ~self.FrameSound
-                return self.FrameSound
-                
-            #if self.isMapperWrite:
-                #return self.FrameFlag
+            #if self.isFrameSound:
+            #    self.FrameFlag &= ~self.FrameSound
+            #    return self.FrameSound
 
-            if self.PPU.CurrentLine in (0,131):
-                self.FrameFlag |= self.FrameSound
-                        
+            #if self.PPU.CurrentLine in (0,131):
+            #    self.FrameFlag |= self.FrameSound
+
+            
+            
             if( self.RenderMethod != TILE_RENDER ):
-                if self.PPU.CurrentLine == 0:
+                if scanline == 0:
                     if( self.RenderMethod < POST_RENDER ):
                         self.EmulationCPU(ScanlineCycles)
                         self.PPU.FrameStart()
                         self.PPU.ScanlineNext()
-                        if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
+                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
                         self.PPU.ScanlineStart()
                     else:
                         self.EmulationCPU(HDrawCycles)
                         self.PPU.FrameStart()
                         self.PPU.ScanlineNext()
-                        if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
+                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
                         self.EmulationCPU(FETCH_CYCLES*32)
                         self.PPU.ScanlineStart()
                         self.EmulationCPU( FETCH_CYCLES*10 + 4 )
                     
-                elif self.PPU.CurrentLine < 240:
+                elif scanline < 240:
                     if( self.RenderMethod < POST_RENDER ):
                         if( self.RenderMethod == POST_ALL_RENDER ):
                             self.EmulationCPU(ScanlineCycles)
-                        self.PPU.RenderScanline()
+                        self.PPU.RenderScanline(scanline)
                         self.PPU.ScanlineNext()
                         if( self.RenderMethod == PRE_ALL_RENDER ):
                             self.EmulationCPU(ScanlineCycles )
                             
-                        if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
+                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
                         self.PPU.ScanlineStart()
                     else:
                         if( self.RenderMethod == POST_RENDER ):
                             self.EmulationCPU(HDrawCycles)
-                        self.PPU.RenderScanline()
+                        self.PPU.RenderScanline(scanline)
 
                         if( self.RenderMethod == PRE_RENDER ):
                             self.EmulationCPU(HDrawCycles)
 
                         self.PPU.ScanlineNext()
 
-                        if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
+                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
                         self.EmulationCPU(FETCH_CYCLES*32)
                         self.PPU.ScanlineStart()
                         self.EmulationCPU(FETCH_CYCLES*10 + 4 )
@@ -860,31 +855,31 @@ class CPU6502(object):
 
 
                     
-                elif self.PPU.CurrentLine == 240:
+                elif scanline == 240:
                     #mapper->VSync()
-                    self.FrameFlag |= self.FRAME_RENDER
+                    #self.FrameFlag |= self.FRAME_RENDER
                     #self.isDraw = 1
                     
                     if( self.RenderMethod == POST_RENDER ):
                         self.EmulationCPU(ScanlineCycles)
-                        if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
+                        if self.MAPPER.HSync( scanline ):self.IRQ_NotPending()
                     else:
                         self.EmulationCPU(HDrawCycles)
-                        if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
+                        if self.MAPPER.HSync( scanline ):self.IRQ_NotPending()
                         self.EmulationCPU(HBlankCycles)
                         
                     self.Frames += 1
                     
                     
-                elif self.PPU.CurrentLine <= 261: #VBLANK
+                elif scanline <= 261: #VBLANK
                     self.isDraw = 0
                         
-                    if self.PPU.CurrentLine == 261:
+                    if scanline == 261:
                         self.PPU.VBlankEnd()
                         #self.FrameFlag |= self.FRAME_RENDER
 
-                    if( self.RenderMethod == POST_RENDER ):
-                        if self.PPU.CurrentLine == 241:
+                    if( self.RenderMethod < POST_RENDER ):
+                        if scanline == 241:
                             self.PPU.VBlankStart()
                             self.EmulationCPU_BeforeNMI(4*12)
                             if self.PPU.reg.PPUCTRL & 0x80:
@@ -893,9 +888,9 @@ class CPU6502(object):
                         else:
                             self.EmulationCPU(ScanlineCycles)
 
-                        if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
+                        if self.MAPPER.HSync( scanline ):self.IRQ_NotPending()
                     else:
-                        if self.PPU.CurrentLine == 241:
+                        if scanline == 241:
                             self.PPU.VBlankStart()
                             self.EmulationCPU_BeforeNMI(4*12)
                             if self.PPU.reg.PPUCTRL & 0x80:
@@ -903,15 +898,15 @@ class CPU6502(object):
                             self.EmulationCPU(HDrawCycles-(4*12))
                         else:
                             self.EmulationCPU(HDrawCycles)
-                        if self.MAPPER.HSync( self.PPU.CurrentLine ):self.IRQ_NotPending()
+                        if self.MAPPER.HSync( scanline ):self.IRQ_NotPending()
                         self.EmulationCPU(HBlankCycles)
 
-                    if self.PPU.CurrentLine == 261:
-                        
-                        self.PPU.CurrentLine_ZERO()
-                        #return 0
-
-                self.PPU.CurrentLine_increment(1)
+                    if scanline == 261:#self.PPU.CurrentLine == 261:
+                        scanline = 0
+                        #self.PPU.CurrentLine = 0
+                        return 1
+                scanline += 1
+                #self.PPU.CurrentLine += 1
             
             #TILE_RENDER
             '''
@@ -2120,24 +2115,31 @@ class CPU6502(object):
             self.PC -= 1;
             self.ADD_CYCLE(4);
         
-def import_CPU_class(addition_spec, jit = True):
-    return jitObject(CPU6502, cpu_spec, addition_spec, jit = jit)
+def jit_CPU_class(addition_spec, jit = True):
+    return jitObject(CPU6502, addition_spec, jit = jit)
 
-def load_CPU(consloe, addition_spec,jit = True):
-    cpu_class, cpu_type = import_CPU_class(addition_spec,jit = jit)
-    cpu = cpu_class(MAPPER = consloe.MAPPER,
-                        MMU = consloe.MMU,
-                        PPU = consloe.PPU,
-                        ChannelWrite = consloe.APU.ChannelWrite)#, #consloe.APU,)
+def load_CPU(MMU,PPU,addition_spec,jit = True):
+    cpu_class = jit_CPU_class(addition_spec,jit = jit)
+    cpu_type = jitType(cpu_class)
+    cpu = cpu_class(MMU = MMU,
+                    PPU = PPU
+                    #ChannelWrite = consloe.APU.ChannelWrite
+                    )#, #consloe.APU,)
     return cpu, cpu_type
+
+
+cpu_spec = []
+#CPU,cpu_type = import_CPU_class(cpu_spec,jit = jit)
 
 if __name__ == '__main__':
     #cpu_ram = Memory()
     
     #cpu6502 = jitObject(cpu6502, cpu_spec)
     
-    cpu = CPU6502(MAPPER = MAPPER())
-    print(cpu.CpuClock)
+    cpu = CPU6502()
+    print(cpu)
+    #CPU = jit_CPU_class(CPU6502,{})
+    #print(CPU)
     
         
 

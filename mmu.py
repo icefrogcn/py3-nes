@@ -27,7 +27,7 @@ class MMU(object):
 
     #ATArray:uint8[:,::1] #force array type C
     
-    
+    ChannelWrite:uint8[:]    
     def __init__(self,ROM = ROM()):
         self.RAM = np.zeros((8,0x2000), np.uint8)
         self.ROM = ROM
@@ -42,6 +42,8 @@ class MMU(object):
         self.NTArray = np.zeros((720, 768),np.uint8)
         #self.NT_BANK = List([np.zeros((240, 256),np.uint8) for i in range(4)])
         self.NT_BANK = List.empty_list(u1[:,::1])
+
+        self.ChannelWrite = np.zeros(0x10,np.uint8)
     
     def reset(self):
         self.CRAM[:] = 0

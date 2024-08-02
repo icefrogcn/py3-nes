@@ -225,8 +225,8 @@ class PPUREG(object):
         #    self.reg[2] &= 0x60 #PPU_SPHIT_FLAG + PPU_SPMAX_FLAG
         self.reg[2] &= 0x7F # cleared vblank after reading $2002  ~self.bit.PPU_VBLANK_FLAG
         return ret
-        
-    def PPUSTATUS_W(self,value):
+    @PPUSTATUS.setter    
+    def PPUSTATUS(self,value):
         self.reg[2] = value
     def PPUSTATUS_ZERO(self):
         self.reg[2] = 0
@@ -320,7 +320,7 @@ class PPUREG(object):
     def PPUDATA(self):          #2007 R
         data = self.PPU7_Temp
         addr = self.reg[6] & 0x3FFF
-        vaddr = self.loopy_v & 0x3FFF
+        addr = self.loopy_v & 0x3FFF
         self.reg[6] += 32 if self.reg[0] & 0x04 else 1
         self.loopy_v += 32 if self.reg[0] & 0x04 else 1
         if(addr >= 0x3000):

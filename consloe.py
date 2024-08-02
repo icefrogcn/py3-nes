@@ -133,7 +133,7 @@ class CONSLOE():
             'PPU': self.PPU_type#,
             #'MAPPER':self.MAPPER_type
             }
-        self.CPU, self.CPU_type = load_CPU(self, addition_spec, jit = self.jit)
+        self.CPU, self.CPU_type = load_CPU(self.MMU, self.PPU, addition_spec, jit = self.jit)
         Log_SYS('init CPU')
        
 
@@ -192,6 +192,7 @@ class CONSLOE():
         self.CPU.reset6502()
         print ('6502 reset:', self.status )
 
+        self.jitsecond = (len(dir(self.CPU)) + len(dir(self.PPU)))/100
         self.thread_show(target = self.Waiting_compiling)
         
         self.thread_show(target = self.ShowFPS)
@@ -221,12 +222,13 @@ class CONSLOE():
         start = time.time()
         exec_cycles = 0
         forceblit = 1
+        Frames = 0
         while self.Running:
             #t = threading.Thread(target = self.CPU.exec6502)
             #t.start()
-            Flag = self.CPU.run6502()
+            Frames += self.CPU.EmulateFrame()
 
-            if Flag == self.CPU.FrameSound:
+            if True:#Flag == self.CPU.FrameSound:
                 pass
                 #Log_HW('Play Sound')
                 self.APU.updateSounds(self.CPU.Frames)
@@ -234,17 +236,17 @@ class CONSLOE():
 
 
             
-            if Flag == self.CPU.FRAME_RENDER:
+            if True:#Flag == self.CPU.FRAME_RENDER:
                 #self.CPU.FrameRender_ZERO()
                 #Frames = self.CPU.Frames
-                if forceblit or self.CPU.Frames % wish_fps == 0 or blit_delay/((self.CPU.Frames % wish_fps) + 1) <= (1.000/wish_fps):
+                if forceblit or Frames % wish_fps == 0 or blit_delay/((Frames % wish_fps) + 1) <= (1.000/wish_fps):
                     self.blitFrame()
                     self.realFrames += 1
 
                 blit_delay += (time.time() - start)
                 
 
-                if self.CPU.Frames % wish_fps == wish_fps - 1:
+                if Frames % wish_fps == wish_fps - 1:
                     blit_delay = 0
                 start = time.time()
             
@@ -274,13 +276,13 @@ class CONSLOE():
     def Waiting_compiling(self):
         if not self.jit:return
         Log_SYS('First runing jitclass, compiling is a very time-consuming process...')
-        Log_SYS('take about 120 seconds (i3-6100U)...ooh...waiting...')
+        Log_SYS(f'take about {self.jitsecond} seconds (i3-6100U)...ooh...waiting...')
         start = time.time()
         while self.CPU.Frames == 0:
-            Log_SYS('jitclass is compiling...%f %% %d' %((time.time()- start) / 1.20 , self.CPU.clockticks6502))
+            Log_SYS('jitclass is compiling...%f %% %d' %((time.time()- start) / self.jitsecond , self.CPU.clockticks6502))
             print('6502: %s' %self.status)
             if self.CPU.clockticks6502 > 0:break
-            if ((time.time()- start) / 1.20) > 150:break
+            #if ((time.time()- start) / self.jitsecond) > 150:break
             time.sleep(5)
         Log_SYS('jitclass compiled...')
             
@@ -349,6 +351,7 @@ class CONSLOE():
             
     def blitScreen(self):
         cv2.imshow("Main", paintBuffer(self.PPU.ScreenArray,self.PPU.Pal,self.PPU.Palettes))
+        #print(self.PPU.ScreenArray)
         cv2.waitKey(1)
 
     def blitPal(self):
@@ -383,7 +386,7 @@ class CONSLOE():
             #cv2.setWindowTitle('Main',"%s %d %d %d"%(FPS,self.CPU.PPU.CurrentLine,self.CPU.PPU.vScroll,self.CPU.PPU.HScroll))
             self.realFrames = 0
             print(FPS, nowFrames, self.CPU.FrameFlag,self.APU.ChannelWrite, self.CPU.clockticks6502)#,self.CPU.PPU.render,self.CPU.PPU.tilebased
-            Log_SYS(self.PPU.Palettes)
+            print(self.PPU.Palettes)
             
             totalFrame = nowFrames
         
