@@ -30,23 +30,18 @@ class MAPPER(object):
         return 2
     
     def reset(self):
-        self.MMC.SetPROM_32K_Bank(0, 1, self.MMC.ROM.PROM_8K_SIZE - 2, self.MMC.ROM.PROM_8K_SIZE - 1)
+        self.MMC.SetPROM_32K_Bank(0, 1, self.MMC.PROM_8K_SIZE - 2, self.MMC.PROM_8K_SIZE - 1)
 
         patch = 0
 
         return 1
-    def Clock(self,cycles):
-        return False
-    def HSync(self,scanline):
-        return False 
     
     def Write(self,addr,data):#$8000-$FFFF Memory write
         self.MMC.SetPROM_16K_Bank(4, data )
 
-    def ReadLow(self,address):#$4100-$7FFF Lower Memory read
-        return self.MMC.ReadLow(address)
 
     def WriteLow(self,address,data): #$4100-$7FFF Lower Memory write
+        #if 
         self.MMC.WriteLow(address,data)
 
 
