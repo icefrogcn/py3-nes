@@ -126,7 +126,10 @@ class MAPPER(object):
         return self.MMC.ReadLow(address)
 
     def WriteLow(self,address,data): #$4100-$7FFF Lower Memory write
-        self.MMC.WriteLow(address,data)
+        if self.Mapper == 2:
+            self.MAPPER2.WriteLow(address,data)
+        else:
+            self.MMC.WriteLow(address,data)
     
     def ExRead(self,address): #$4018-$40FF Extention register read/write
         return 0
