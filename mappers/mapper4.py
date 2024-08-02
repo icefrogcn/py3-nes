@@ -148,13 +148,10 @@ class MAPPER():
         elif addr == 0xA000:
             self.reg[2] = data
             if data & 0x01:
-                self.MMC.Mirroring = 0
+                self.MMC.SetVRAM_Mirror(0)
             else:
-                self.MMC.Mirroring = 1
-                #elif data == 2:self.MMC.Mirroring_W(3) #VRAM_MIRROR4L
-                #else:self.MMC.Mirroring_W(4) #VRAM_MIRROR4H
-                #print "Mirroring",NES.Mirroring
-                #self.MMC.MirrorXor_W(((self.MMC.Mirroring + 1) % 3) * 0x400)
+                self.MMC.SetVRAM_Mirror(1)
+
         elif addr == 0xA001:
             self.reg[3] = data
                    

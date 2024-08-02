@@ -8,7 +8,8 @@ from numba import int8,uint8,int16,uint16,uint32
 import numba as nb
 import numpy as np
 
-
+import spec
+from mmc import MMC
 
 
 mapper_spec = [#('MMC',MMC_type),
@@ -21,9 +22,18 @@ mapper_spec = [#('MMC',MMC_type),
         ('addrmask',uint16),
         ('RenderMethod',uint8)
         ]
-#@jitclass(spec)
+@jitclass()
 class MAPPER(object):
-
+    MMC: MMC
+    
+    reg:uint8[:]
+    irq_enable:uint8
+    irq_counter:uint8
+    irq_latch:uint8
+    irq_clock:uint16
+    irq_occur:uint8
+    addrmask:uint16
+    RenderMethod:uint8
 
     def __init__(self,MMC):
         self.MMC = MMC
@@ -55,11 +65,6 @@ class MAPPER(object):
 	
         return 1
 
-    def WriteLow(self,address,data):
-        self.MMC.WriteLow(address,data)
-
-    def ReadLow(self,address):
-        return self.MMC.ReadLow(address)
 
     def Write(self,address,data):#$8000-$FFFF Memory write
         addr = address & self.addrmask
@@ -75,12 +80,10 @@ class MAPPER(object):
             if data != 0xFF:
                 
                 data &= 0x03
-                if data == 0:self.MMC.Mirroring_W(1)
-                elif data == 1:self.MMC.Mirroring_W(2)
-                elif data == 2:self.MMC.Mirroring_W(3) #VRAM_MIRROR4L
-                else:self.MMC.Mirroring_W(4) #VRAM_MIRROR4H
-                #print "Mirroring",NES.Mirroring
-                #self.MMC.MirrorXor_W(((self.MMC.Mirroring + 1) % 3) * 0x400)
+                if data == 0:self.MMC.SetVRAM_Mirror(1)
+                elif data == 1:self.MMC.SetVRAM_Mirror(0)
+                elif data == 2:self.MMC.SetVRAM_Mirror(3) #VRAM_MIRROR4L
+                else:self.MMC.SetVRAM_Mirror(4) #VRAM_MIRROR4H
                 
         elif addr == 0x9008:
             self.reg[8] = data & 0x02
@@ -139,19 +142,12 @@ class MAPPER(object):
                 return True
         return False
             
-    def HSync(self,scanline):
-        return False
-
 
 
 
 if __name__ == '__main__':
-    sys.path.append('..')
-    from mmc import MMC,MMC_spec
-    from jitcompile import jitObject
-    mapper_class, mapper_type = jitObject(MAPPER, mapper_spec,MMC_spec(), jit = True)
 
-    mapper = mapper_class(MMC())
+    mapper = MAPPER(MMC())
     print(mapper)
 
 

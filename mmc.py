@@ -234,7 +234,7 @@ class MMC(object):
 
     def SetVRAM_Mirror(self, Mirror ):
         if Mirror == self.VRAM_HMIRROR:
-            self.SetVRAM_Bank( 0, 0, 1, 1 )
+            self.SetVRAM_Bank( 0, 0, 2, 2 )
             #self.SetNT_bank(0, 0, 1, 1)
 			
         elif Mirror == self.VRAM_VMIRROR:
@@ -323,7 +323,7 @@ if __name__ == '__main__':
     #mapper = import_MAPPER()
     #print(mapper)
     from rom import ROM ,nesROM
-    mmc = MMC(MMU(nesROM().LoadROM('roms//1942.nes')))
+    mmc = MMC(MMU(nesROM().LoadROM('roms//B-Wings.nes')))
     mmc.reset()
     
 

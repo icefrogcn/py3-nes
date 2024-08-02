@@ -34,6 +34,7 @@ class MAPPER(object):
     MAPPER2:mapper2.MAPPER
     MAPPER3:mapper3.MAPPER
     MAPPER4:mapper4.MAPPER
+    MAPPER23:mapper23.MAPPER
     #M_List:ListType(L)
     
     
@@ -45,6 +46,7 @@ class MAPPER(object):
         self.MAPPER2 = mapper2.MAPPER(self.MMC)
         self.MAPPER3 = mapper3.MAPPER(self.MMC)
         self.MAPPER4 = mapper4.MAPPER(self.MMC)
+        self.MAPPER23 = mapper23.MAPPER(self.MMC)
         #self.M_List.append(self.MAPPER0)
         #self.M_List.append(self.MAPPER2)
         
@@ -81,6 +83,8 @@ class MAPPER(object):
             
         elif self.Mapper == 4:
             self.MAPPER4.reset()
+        elif self.Mapper == 23:
+            self.MAPPER23.reset()
         else:
             print('reset mapper',self.Mapper)
 
@@ -92,9 +96,13 @@ class MAPPER(object):
             if hasattr(self.MAPPER2,'Write'):self.MAPPER2.Write(addr,data)
         
         elif self.Mapper == 3:
-            self.MAPPER4.Write(addr,data)
+            self.MAPPER3.Write(addr,data)
+            
         elif self.Mapper == 4:
             self.MAPPER4.Write(addr,data)
+            
+        elif self.Mapper == 23:
+            self.MAPPER23.Write(addr,data)
         else:
             print('Write mapper',self.Mapper)
         pass
@@ -129,10 +137,12 @@ class MAPPER(object):
     def Clock(self, cycle ):
         if self.Mapper == 4:
             return self.MAPPER4.Clock(cycle)
+        elif self.Mapper == 23:
+            return self.MAPPER23.Clock(cycle)
         return False
-    def HSync(self, cycle ):
+    def HSync(self, scanline ):
         if self.Mapper == 4:
-            return self.MAPPER4.HSync(cycle)
+            return self.MAPPER4.HSync(scanline)
         return False
 
 if __name__ == '__main__':
