@@ -82,6 +82,9 @@ class MMC(object):
     @property
     def CRAM(self):
         return self.MMU.CRAM
+    @property
+    def WRAM(self):
+        return self.MMU.WRAM
 
     @property
     def NTArray(self):
@@ -130,6 +133,9 @@ class MMC(object):
     @property
     def VROM_4K_SIZE(self):
         return self.ROM.VROM_4K_SIZE
+    @property
+    def VROM_8K_SIZE(self):
+        return self.ROM.VROM_8K_SIZE
 
 
 

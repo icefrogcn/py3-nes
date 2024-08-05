@@ -8,7 +8,8 @@ from numba import int8,uint8,int16,uint16,uint32
 import numba as nb
 import numpy as np
 
-
+import spec
+from mmc import MMC
 
 mapper_spec = [#('MMC',MMC_type),
         ('reg',uint8[:]),
@@ -19,10 +20,18 @@ mapper_spec = [#('MMC',MMC_type),
         ('patch',uint8),
         ('RenderMethod',uint8)        
         ]
-#@jitclass(spec)
+@jitclass()
 class MAPPER(object):
+    MMC: MMC
+    reg:uint8[:]
+    exram:uint8[:]
+    irq_enable:uint8
+    irq_counter:uint8
+    exsound_enable:uint8
+    patch:uint8
+    RenderMethod:uint8
     
-    def __init__(self,MMC):
+    def __init__(self,MMC = MMC()):
         self.MMC = MMC
 
         self.patch = 0
@@ -41,19 +50,32 @@ class MAPPER(object):
 
     def reset(self):
         
-        self.MMC.SetPROM_32K_Bank(0, 1, self.MMC.ROM.PROM_8K_SIZE-2, self.MMC.ROM.PROM_8K_SIZE-1 )
+        self.MMC.SetPROM_32K_Bank(0, 1, self.MMC.PROM_8K_SIZE-2, self.MMC.PROM_8K_SIZE-1 )
 
-        if( self.MMC.ROM.VROM_1K_SIZE >= 8 ):
-            self.MMC.SetVROM_8K_Bank( self.MMC.ROM.VROM_8K_SIZE - 1 );
+        if( self.MMC.VROM_1K_SIZE >= 8 ):
+            self.MMC.SetVROM_8K_Bank( self.MMC.VROM_8K_SIZE - 1 );
         self.exsound_enable = 0xFF
         return 1
 
     def ReadLow(self,address):
         #print "ReadLow 19"
-        #addr = address & 0xF800
-        if (address & 0xF800) in (0x6000,0x6800,0x7000,0x7800):
+        addr = address & 0xF800
+        if addr in (0x6000,0x6800,0x7000,0x7800):
             return self.MMC.ReadLow(address)
-        return 0
+        elif addr == 0x4800:
+            if self.exsound_enable:
+                data = self.exram[self.reg[2]&0x7F]
+            else:
+                data = self.MMC.WRAM[self.reg[2]&0x7F]
+            if self.reg[2]&0x80:
+                self.reg[2] = (self.reg[2] + 1 )|0x80
+            return data
+        elif addr == 0x5000:
+            return self.irq_counter & 0x00FF
+        elif addr == 0x5800:
+            return (self.irq_counter >> 8 ) & 0x7F
+            
+        return addr>>8
             
     def WriteLow(self,address,data):
         #print "WriteLow 19"
@@ -62,6 +84,18 @@ class MAPPER(object):
             #print "irq_enable try"
             self.irq_counter = (self.irq_counter & 0x00FF) | ((data & 0x7F) << 8)
             self.irq_enable  = data & 0x80
+            if self.irq_enable:
+                self.irq_counter += 1
+        elif addr == 0x4800:
+            if self.exsound_enable:
+                self.exram[self.reg[2]&0x7F] = data
+            else:
+                self.MMC.WRAM[self.reg[2]&0x7F] = data
+            if self.reg[2]&0x80:
+                self.reg[2] = (self.reg[2] + 1 )|0x80
+            
+        elif addr == 0x5000:
+            self.irq_counter = (self.irq_counter & 0x00FF) | data
             if self.irq_enable:
                 self.irq_counter += 1
             
@@ -178,12 +212,7 @@ class MAPPER(object):
 
 
 if __name__ == '__main__':
-    sys.path.append('..')
-    from mmc import MMC,MMC_spec
-    from jitcompile import jitObject
-    mapper_class, mapper_type = jitObject(MAPPER, mapper_spec, MMC_spec(), jit = True)
-
-    mapper = mapper_class(MMC())
+    mapper = MAPPER()
     print(mapper)
 
 

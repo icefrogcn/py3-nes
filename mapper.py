@@ -34,6 +34,7 @@ class MAPPER(object):
     MAPPER2:mapper2.MAPPER
     MAPPER3:mapper3.MAPPER
     MAPPER4:mapper4.MAPPER
+    MAPPER19:mapper19.MAPPER
     MAPPER23:mapper23.MAPPER
     #M_List:ListType(L)
     
@@ -46,6 +47,7 @@ class MAPPER(object):
         self.MAPPER2 = mapper2.MAPPER(self.MMC)
         self.MAPPER3 = mapper3.MAPPER(self.MMC)
         self.MAPPER4 = mapper4.MAPPER(self.MMC)
+        self.MAPPER19 = mapper19.MAPPER(self.MMC)
         self.MAPPER23 = mapper23.MAPPER(self.MMC)
         #self.M_List.append(self.MAPPER0)
         #self.M_List.append(self.MAPPER2)
@@ -83,6 +85,10 @@ class MAPPER(object):
             
         elif self.Mapper == 4:
             self.MAPPER4.reset()
+            
+        elif self.Mapper == 19:
+            self.MAPPER19.reset()
+
         elif self.Mapper == 23:
             self.MAPPER23.reset()
         else:
@@ -100,6 +106,9 @@ class MAPPER(object):
             
         elif self.Mapper == 4:
             self.MAPPER4.Write(addr,data)
+            
+        elif self.Mapper == 19:
+            self.MAPPER19.Write(addr,data)
             
         elif self.Mapper == 23:
             self.MAPPER23.Write(addr,data)
@@ -123,11 +132,16 @@ class MAPPER(object):
         
 
     def ReadLow(self,address):#$4100-$7FFF Lower Memory read
+        if self.Mapper == 19:
+            return self.MAPPER19.ReadLow(address)
+        
         return self.MMC.ReadLow(address)
 
     def WriteLow(self,address,data): #$4100-$7FFF Lower Memory write
         if self.Mapper == 2:
             self.MAPPER2.WriteLow(address,data)
+        if self.Mapper == 19:
+            self.MAPPER19.WriteLow(address,data)
         else:
             self.MMC.WriteLow(address,data)
     
@@ -140,6 +154,8 @@ class MAPPER(object):
     def Clock(self, cycle ):
         if self.Mapper == 4:
             return self.MAPPER4.Clock(cycle)
+        elif self.Mapper == 19:
+            return self.MAPPER19.Clock(cycle)
         elif self.Mapper == 23:
             return self.MAPPER23.Clock(cycle)
         return False
