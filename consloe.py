@@ -218,24 +218,48 @@ class CONSLOE():
     def run(self):
         blit_delay = 0
         self.realFrames = 0
-        wish_fps = 60
+        wish_fps = 50
+        frame_period = 1.000 / wish_fps
         start = time.time()
         exec_cycles = 0
-        forceblit = 1
+        forceblit = 0
         Frames = 0
+        nowframe = 1
+        isDraw = 1
         while self.Running:
             #t = threading.Thread(target = self.CPU.exec6502)
             #t.start()
-            Frames += self.CPU.EmulateFrame()
+            if Frames % wish_fps == 0:
+                start = time.time()
+                blit_delay = 0
+                nowframe = 1
+                
+            Frames += self.CPU.EmulateFrame(isDraw)
 
             if True:#Flag == self.CPU.FrameSound:
                 pass
-                #Log_HW('Play Sound')
-                self.APU.updateSounds(self.CPU.Frames)
-                #self.SaveSounds()
+            #Log_HW('Play Sound')
+            if isDraw:
+                self.blitFrame()
+                self.realFrames += 1
 
+            self.APU.updateSounds(self.CPU.Frames)
+            #self.SaveSounds()
 
+            self.Running = JOYPAD_CHK(self.CPU)
+
+            self.Cheat()
+                
+            #blit_delay += (time.time() - start)
+            blit_delay = (time.time() - start)
             
+            if forceblit or (Frames % wish_fps == 0) or (blit_delay / (Frames % wish_fps) <= frame_period):
+                isDraw = 1
+            else:
+                isDraw = 0
+            #nowframe += 1
+    
+            '''
             if True:#Flag == self.CPU.FRAME_RENDER:
                 #self.CPU.FrameRender_ZERO()
                 #Frames = self.CPU.Frames
@@ -249,11 +273,9 @@ class CONSLOE():
                 if Frames % wish_fps == wish_fps - 1:
                     blit_delay = 0
                 start = time.time()
-            
+            '''
 
-                self.Running = JOYPAD_CHK(self.CPU)
-
-                self.Cheat()   
+                   
 
 
 
@@ -276,13 +298,13 @@ class CONSLOE():
     def Waiting_compiling(self):
         if not self.jit:return
         Log_SYS('First runing jitclass, compiling is a very time-consuming process...')
-        Log_SYS(f'take about {self.jitsecond} seconds (i3-6100U)...ooh...waiting...')
+        Log_SYS(f'take about {self.jitsecond * 100} seconds (i3-6100U)...ooh...waiting...')
         start = time.time()
         while self.CPU.Frames == 0:
             Log_SYS('jitclass is compiling...%f %% %d' %((time.time()- start) / self.jitsecond , self.CPU.clockticks6502))
             print('6502: %s' %self.status)
             if self.CPU.clockticks6502 > 0:break
-            #if ((time.time()- start) / self.jitsecond) > 150:break
+            if ((time.time()- start) / self.jitsecond) > 100:break
             time.sleep(5)
         Log_SYS('jitclass compiled...')
             
@@ -290,35 +312,36 @@ class CONSLOE():
         if self.PPU_Running:
             if self.CPU.Frames:
                 if self.PPU_render:
-                    self.PPU.RenderFrame()
                     
                     if self.debug:
                         pass
+                        self.PPU.RenderVRAM()
                         self.blitVRAM()
                         self.blitPal()
-                        self.blitScreen()
                         #self.batch.draw()
                     else:
-                        self.blitScreen()
                         self.blitPal()
+                        
+                    return self.blitScreen()
 
     def blitFrame_thread(self):
         while True:
             #print('blit thread',self.CPU.isDraw,self.CPU.Frames,self.CPU.clockticks6502)
             if self.CPU.isDraw:
                 self.CPU.isDraw = 0
-                print ('blitFrame: ',self.CPU.Frames)
-                self.PPU.RenderFrame()
                 
                 if self.debug:
                         pass
+                        print ('blitFrame: ',self.CPU.Frames)
+                        self.PPU.RenderVRAM()
                         self.blitVRAM()
                         self.blitPal()
-                        self.blitScreen()
                         #self.batch.draw()
                 else:
-                        self.blitScreen()
                         self.blitPal()
+
+                return self.blitScreen()
+                        
                 
             
     def ScreenShow(self):
@@ -340,8 +363,7 @@ class CONSLOE():
             #cv2.namedWindow('PatternTable1', cv2.WINDOW_NORMAL)
             cv2.namedWindow('Nametable', cv2.WINDOW_NORMAL)
             cv2.namedWindow('Main', cv2.WINDOW_NORMAL)
-        #cv2.namedWindow('PatternTable2', cv2.WINDOW_NORMAL)
-        #cv2.namedWindow('PatternTable3', cv2.WINDOW_NORMAL)
+
     def ShutDown(self):
         if self.PPU_render:
             cv2.destroyAllWindows()
@@ -352,7 +374,7 @@ class CONSLOE():
     def blitScreen(self):
         cv2.imshow("Main", paintBuffer(self.PPU.ScreenArray,self.PPU.Pal,self.PPU.Palettes))
         #print(self.PPU.ScreenArray)
-        cv2.waitKey(1)
+        return cv2.waitKey(1)
 
     def blitPal(self):
         cv2.imshow("Pal", np.array([[self.PPU.Pal[i] for i in self.PPU.Palettes]]))
@@ -393,7 +415,7 @@ class CONSLOE():
 
             
 
-
+#          B   A  SE  ST  UP  DN  LF  RT  BB  AA
 P1_PAD = ['k','j','v','b','w','s','a','d','i','u']
 
 def JOYPAD_PRESS(PAD_SET):
@@ -428,8 +450,8 @@ def JOYPAD_CHK(CPU):
         print (fc.PPU.NTLine)
     elif keyboard.is_pressed('2'):
         print (fc.PPU.ATLine)
-    else:
-        return 1
+
+    return 1
     
 
 @njit
@@ -496,7 +518,7 @@ if __name__ == '__main__':
     #run(debug = True)
     ROMS = roms_list()
     ROMS_INFO = get_roms_mapper(ROMS)
-    fc = CONSLOE(True,jit = 1)
+    fc = CONSLOE(1, jit = 1)
 
     while True:
         show_choose(ROMS_INFO)
