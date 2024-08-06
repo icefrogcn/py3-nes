@@ -18,7 +18,7 @@ class ROM(object):
     data: uint8[::1]    #force array type C
     REG: uint16[:]
         
-    def __init__(self, data = np.zeros(0x40, np.uint8)):
+    def __init__(self, data = np.zeros(0x20, np.uint8)):
         self.REG = np.zeros(0x10, np.uint16)
 
         self.data = data

@@ -26,12 +26,16 @@ class MMU(object):
     SpriteRAM:uint8[:]
     Palettes:uint8[:]
 
+    CPUREG:uint8[:]
+
     NTArray:uint8[:,::1] #force array type C
     NT_BANK:ListType(u1[:,::1])
 
     #ATArray:uint8[:,::1] #force array type C
     
     ChannelWrite:uint8[:]    
+    exsound_select:uint8
+
     def __init__(self,ROM = ROM()):
         self.RAM = np.zeros((8,0x2000), np.uint8)
         self.ROM = ROM
@@ -44,11 +48,14 @@ class MMU(object):
         self.SpriteRAM = np.zeros(0x100,np.uint8)
         self.Palettes = np.zeros(0x20,np.uint8)
 
+        self.CPUREG = np.zeros(0x18,np.uint8)
+        
         self.NTArray = np.zeros((720, 768),np.uint8)
         #self.NT_BANK = List([np.zeros((240, 256),np.uint8) for i in range(4)])
         self.NT_BANK = List.empty_list(u1[:,::1])
 
         self.ChannelWrite = np.zeros(0x10,np.uint8)
+        self.exsound_select = 0
     
     def reset(self):
         self.CRAM[:] = 0

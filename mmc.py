@@ -158,6 +158,8 @@ class MMC(object):
         else:
             self.SetVRAM_Mirror( 0 )
 
+        self.SelectExSound(0)
+
     def Write(self,addr,data):#$8000-$FFFF Memory write
         pass
 
@@ -175,10 +177,18 @@ class MMC(object):
             self.RAM[3, address & 0x1FFF] = data
     
     def ExRead(self,address): #$4018-$40FF Extention register read/write
-        return 0
+        data = 0
+        if self.MMU.exsound_select & 0x10:
+            if address == 0x4800:
+                pass
+        if self.MMU.exsound_select & 0x04:
+            if( address >= 0x4040 and address < 0x4100 ):
+                data = 0
+        return data
     
-    def ExWrite(self, address, data ):
-        pass
+    def ExWrite(self, address, data ):#$4100-$5FFF Lower Memory write
+        if ( address >= 0x4000 ):
+            self.RAM[2, address & 0x1FFF] = data
     
     def Clock(self, cycle ):
         return False
@@ -306,7 +316,11 @@ class MMC(object):
         self.PPU_MEM_BANK[page] = self.VROM[0x0400*bank:0x0400*bank + 0x400]
         self.PPU_MEM_TYPE[page] = 0x00
 
+    def SelectExSound(self,data):
+        self.MMU.exsound_select = data
 
+
+        
 def MMC_spec():
     MMC_type = nb.deferred_type()
     MMC_type.define(MMC.class_type.instance_type)

@@ -31,6 +31,7 @@ class MAPPER(object):
     
     MMC:MMC
     MAPPER0:mapper0.MAPPER
+    MAPPER1:mapper1.MAPPER
     MAPPER2:mapper2.MAPPER
     MAPPER3:mapper3.MAPPER
     MAPPER4:mapper4.MAPPER
@@ -44,6 +45,7 @@ class MAPPER(object):
         #self.VRAM = memory.VRAM
         self.MMC = MMC
         self.MAPPER0 = mapper0.MAPPER(self.MMC)
+        self.MAPPER1 = mapper1.MAPPER(self.MMC)
         self.MAPPER2 = mapper2.MAPPER(self.MMC)
         self.MAPPER3 = mapper3.MAPPER(self.MMC)
         self.MAPPER4 = mapper4.MAPPER(self.MMC)
@@ -77,6 +79,9 @@ class MAPPER(object):
         if self.Mapper == 0:
             self.MAPPER0.reset()
         
+        elif self.Mapper == 1:
+            self.MAPPER1.reset()
+
         elif self.Mapper == 2:
             self.MAPPER2.reset()
             
@@ -91,12 +96,15 @@ class MAPPER(object):
 
         elif self.Mapper == 23:
             self.MAPPER23.reset()
-        else:
-            print('reset mapper',self.Mapper)
+
+        print('reset mapper',self.Mapper)
 
     def Write(self,addr,data):#$8000-$FFFF Memory write
         if self.Mapper == 0:
             if hasattr(self.MAPPER0,'Write'):self.MAPPER0.Write(addr,data)
+        
+        if self.Mapper == 1:
+            if hasattr(self.MAPPER1,'Write'):self.MAPPER1.Write(addr,data)
         
         elif self.Mapper == 2:
             if hasattr(self.MAPPER2,'Write'):self.MAPPER2.Write(addr,data)
@@ -146,10 +154,10 @@ class MAPPER(object):
             self.MMC.WriteLow(address,data)
     
     def ExRead(self,address): #$4018-$40FF Extention register read/write
-        return 0
+        return self.MMC.ExRead(address)
     
     def ExWrite(self, address, data ):
-        pass
+        self.MMC.ExWrite(address,data)
     
     def Clock(self, cycle ):
         if self.Mapper == 4:
@@ -159,11 +167,40 @@ class MAPPER(object):
         elif self.Mapper == 23:
             return self.MAPPER23.Clock(cycle)
         return False
+
+    
     def HSync(self, scanline ):
         if self.Mapper == 4:
             return self.MAPPER4.HSync(scanline)
         return False
 
+    @property
+    def MAPPERS(self):
+        m = [self.MAPPER0,
+        self.MAPPER1,
+        self.MAPPER2,
+        self.MAPPER3,
+        self.MAPPER4,
+        self.MAPPER19,
+        self.MAPPER23
+            ]
+        '''
+        if self.Mapper == 0:
+            return self.MAPPER0
+        elif self.Mapper == 1:
+            return self.MAPPER1
+        elif self.Mapper == 2:
+            return self.MAPPER2
+        elif self.Mapper == 3:
+            return self.MAPPER3'''
+        return m[0]
+
+    def resetn(self):
+        self.MAPPERS().reset()
+
+
+
+        
 if __name__ == '__main__':
     #mapper = import_MAPPER()
     #print(mapper)
@@ -171,6 +208,7 @@ if __name__ == '__main__':
     from mmu import MMU
     mmc = MMC(MMU(nesROM().LoadROM('roms//kage.nes')))
     m = MAPPER(mmc)
+    #m = MAPPER()
     
 
 
