@@ -16,7 +16,7 @@ import numba as nb
 @jitclass
 class ROM(object):
     data: uint8[::1]    #force array type C
-    REG: uint16[:]
+    REG: uint16[::1]
         
     def __init__(self, data = np.zeros(0x20, np.uint8)):
         self.REG = np.zeros(0x10, np.uint16)

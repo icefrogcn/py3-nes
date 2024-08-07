@@ -11,11 +11,11 @@ from rom import ROM
 
 @jitclass
 class MMU(object):
-    RAM:uint8[:,:]
+    RAM:uint8[:,::1]
     ROM:ROM
     
     PPU_MEM_BANK:ListType(u1[::1])
-    PPU_MEM_TYPE:uint8[:]
+    PPU_MEM_TYPE:uint8[::1]
 
     WRAM:uint8[::1] #force array type C
 
@@ -23,17 +23,17 @@ class MMU(object):
     CRAM:uint8[::1] #force array type C
     VRAM:uint8[::1] #force array type C
     
-    SpriteRAM:uint8[:]
-    Palettes:uint8[:]
+    SpriteRAM:uint8[::1]
+    Palettes:uint8[::1]
 
-    CPUREG:uint8[:]
+    CPUREG:uint8[::1]
 
     NTArray:uint8[:,::1] #force array type C
     NT_BANK:ListType(u1[:,::1])
 
     #ATArray:uint8[:,::1] #force array type C
     
-    ChannelWrite:uint8[:]    
+    ChannelWrite:uint8[::1]    
     exsound_select:uint8
 
     def __init__(self,ROM = ROM()):
