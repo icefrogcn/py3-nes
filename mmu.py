@@ -11,11 +11,11 @@ from rom import ROM
 
 @jitclass
 class MMU(object):
-    RAM:uint8[:,::1]
+    RAM:uint8[:,:]
     ROM:ROM
     
     PPU_MEM_BANK:ListType(u1[::1])
-    PPU_MEM_TYPE:uint8[::1]
+    PPU_MEM_TYPE:uint8[:]
 
     WRAM:uint8[::1] #force array type C
 
@@ -23,22 +23,22 @@ class MMU(object):
     CRAM:uint8[::1] #force array type C
     VRAM:uint8[::1] #force array type C
     
-    SpriteRAM:uint8[::1]
-    Palettes:uint8[::1]
+    SpriteRAM:uint8[:]
+    Palettes:uint8[:]
 
-    CPUREG:uint8[::1]
+    CPUREG:uint8[:]
 
     NTArray:uint8[:,::1] #force array type C
     NT_BANK:ListType(u1[:,::1])
 
     #ATArray:uint8[:,::1] #force array type C
     
-    ChannelWrite:uint8[::1]    
+    ChannelWrite:uint8[:]    
     exsound_select:uint8
 
-    def __init__(self,ROM = ROM()):
+    def __init__(self):
         self.RAM = np.zeros((8,0x2000), np.uint8)
-        self.ROM = ROM
+        self.ROM = ROM()
         self.WRAM = np.zeros(128*1024,np.uint8)
         self.CRAM = np.zeros(32*1024,np.uint8)
         self.VRAM = np.zeros(4*1024,np.uint8)
@@ -58,12 +58,17 @@ class MMU(object):
         self.exsound_select = 0
     
     def reset(self):
+        self.RAM[::] = 0
+        self.WRAM[:] = 0
         self.CRAM[:] = 0
         self.VRAM[:] = 0
+        self.PPU_MEM_TYPE[:] = 0
         self.SpriteRAM[:] = 0
-        self.RAM[::] = 0
         self.Palettes[:] = 0
 
+        self.ChannelWrite[:] = 0
+        self.exsound_select = 0
+    
                     
 if __name__ == '__main__':
 

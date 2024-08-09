@@ -2,7 +2,7 @@
 #This is NES PAL.
 import numpy as np
 
-from numba import jit,njit
+#from numba import jit,njit
 
 
 m_Pal_VNES = [
@@ -23,12 +23,9 @@ m_Pal_VNES = [
 	0xA0, 0xA0, 0xFF, 0xC8, 0xA0, 0xFF, 0xF0, 0xA0, 0xA0, 0xA0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
         
-#RGBpal = np.array(pal,dtype=np.uint8)
 
-RGBpal = np.array([[m_Pal_VNES[i],m_Pal_VNES[i+1],m_Pal_VNES[i+2]] for i in range(0,len(m_Pal_VNES),3)],dtype=np.uint8)
 
-#@jit
-def BGRpal():
+def BGR():
     pal = np.zeros((0x40,0x3), np.uint8)
 
     pal[0] = [0x79, 0x7B, 0x79]
@@ -60,11 +57,14 @@ def BGRpal():
 
     return np.array([[b,g,r] for r,g,b in pal], np.uint8)
 
+RGBpal = np.array([[m_Pal_VNES[i],m_Pal_VNES[i+1],m_Pal_VNES[i+2]] for i in range(0,len(m_Pal_VNES),3)],dtype=np.uint8)
+
+BGRpal = BGR()
 
 if __name__ == '__main__':
     print(RGBpal)
 
-    print(BGRpal())
+    print(BGRpal)
         
 
 

@@ -26,6 +26,7 @@ from mmu import MMU
 
 #from apu import APU#,APU_type
 from ppu import PPU, load_PPU, jit_PPU_class
+from ppu_reg import PPUREG, PPUBIT
 from mapper import MAPPER
 from joypad import JOYPAD
 
@@ -93,7 +94,6 @@ class CPU6502(object):
     FrameFlag: uint8
     isDraw:uint8
     Frames: uint32
-    #PPU: PPU
     RenderMethod: uint8
     ChannelWrite: uint8[:]
     
@@ -103,15 +103,16 @@ class CPU6502(object):
 
     '32bit instructions are faster in protected mode than 16bit'
     MMU:MMU
-
+    PPU: PPU
+    
     MAPPER: MAPPER
     #MMC: MMC
     
     def __init__(self,
                  MMU = MMU(),
-                 PPU = PPU(),
+                 PPU = PPU()
                  #ChannelWrite = ChannelWrite,
-                 JOYPAD = JOYPAD()
+                 #JOYPAD = JOYPAD()
                  ):
 
         #self.AddressMask =0 #Long 'Integer
@@ -144,6 +145,7 @@ class CPU6502(object):
         self.MAPPER = MAPPER(MMC(self.MMU))
 
         
+        
         #self.debug = 0
 
 
@@ -157,7 +159,7 @@ class CPU6502(object):
         self.ChannelWrite = self.MMU.ChannelWrite
 
         
-        self.JOYPAD = JOYPAD
+        self.JOYPAD = JOYPAD()
 
         self.RenderMethod = self.MAPPER.RenderMethod
         
@@ -177,6 +179,9 @@ class CPU6502(object):
     @property
     def Sound(self):
         return self.MMU.RAM[2][0:0x100]
+    @property
+    def CPUREG(self):
+        return self.MMU.CPUREG
     
         
     @property
@@ -791,7 +796,7 @@ class CPU6502(object):
         return self.FrameFlag & self.FrameSound
 
     
-    def EmulateFrame(self):
+    def EmulateFrame(self,isDraw=1):
         scanline = 0
         while self.Running:
             #if self.isFrameRender:
@@ -830,7 +835,8 @@ class CPU6502(object):
                     if( self.RenderMethod < POST_RENDER ):
                         if( self.RenderMethod == POST_ALL_RENDER ):
                             self.EmulationCPU(ScanlineCycles)
-                        self.PPU.RenderScanline(scanline)
+                        if isDraw:
+                            self.PPU.RenderScanline(scanline)
                         self.PPU.ScanlineNext()
                         if( self.RenderMethod == PRE_ALL_RENDER ):
                             self.EmulationCPU(ScanlineCycles )
@@ -840,7 +846,8 @@ class CPU6502(object):
                     else:
                         if( self.RenderMethod == POST_RENDER ):
                             self.EmulationCPU(HDrawCycles)
-                        self.PPU.RenderScanline(scanline)
+                        if isDraw:
+                            self.PPU.RenderScanline(scanline)
 
                         if( self.RenderMethod == PRE_RENDER ):
                             self.EmulationCPU(HDrawCycles)
@@ -1032,31 +1039,46 @@ class CPU6502(object):
     
     def RD6502(self, address):
         bank = address >> 13
-        value = 0
+        
         #if bank == 0 or bank >= 0x04: #in (0x00,0x04,0x05,0x06,0x07):  
             #return self.RAM.Read(address)
         if bank == 0x00:                        # 0x0 - 0x1FFF:
             return self.RAM[0, address & 0x7FF]
         elif bank > 0x03:                       # 0x8000 - 0xFFFF
+            #return self.MAPPER.Read(address)
             return self.RAM[bank, address & 0x1FFF]
         
-        elif bank == 0x01: 
+        elif bank == 0x01:                      # 0x2000 - 0x3FFF:
             return self.PPU.Read(address)
 
-        elif (address >=0x4000 and address <=0x4013) or address == 0x4015:
-            return self.Sound[address - 0x4000]
-            #return self.APU.Sound[address - 0x4000]
-        
-        elif address in (0x4016,0x4017): #"Read PAD"
-            return self.JOYPAD.Read(address) | 0x40
-
+        elif bank == 0x02:                      # 0x4000 - 0x5FFF:
+            if address < 0x4100:
+                return self.ReadReg(address)
+            else:
+                return self.MAPPER.ReadLow(address)
             
         elif bank == 0x03: #0x6000 - 0x7FFF:
             return self.MAPPER.ReadLow(address)
             
         return 0  
 
+    def ReadReg(self,address):
+        if (address >=0x4000 and address <=0x4013) or address == 0x4015:
+            #return self.Sound[address - 0x4000]
+            return self.RAM[2][address & 0x1FFF]
+        elif address == 0x14:
+            return address&0xFF
+        
+        elif address == 0x4016: #"Read PAD"
+            return self.JOYPAD.Read(address) | 0x40
+        
+        elif address == 0x4017: #"Read PAD"
+            return self.JOYPAD.Read(address) | self.RAM[2][address & 0x1FFF]
 
+        else:
+            return self.MAPPER.ExRead(address)
+
+        
     def WR6502(self,address,value):
         bank = address >> 13
         addr2 = address >> 15
@@ -1082,9 +1104,11 @@ class CPU6502(object):
             '$4000-$5FFF'
             if address < 0x4100:
                 self.WriteReg(address,value)
+            else:
+                self.MAPPER.WriteLow(address, value)
         
         elif bank == 0x03:#Address >= 0x6000 and Address <= 0x7FFF:
-            return self.MAPPER.WriteLow(address, value)
+            self.MAPPER.WriteLow(address, value)
 
         elif bank >= 0x04: #Address >=0x8000 and Address <=0xFFFF:
             self.MapperWrite(address, value)
@@ -1099,11 +1123,16 @@ class CPU6502(object):
             
     def WriteReg(self,address,value):
         addr = address & 0xFF
+        
+        if addr < 0x18:
+            self.CPUREG[addr] = value
+        
         if addr == 0x15:
-            self.Sound[0x15] = value
+            #self.Sound[0x15] = value
+            self.RAM[2][address & 0x1FFF] = value
 
         elif addr <= 0x13:
-            self.Sound[addr] = value
+            self.RAM[2][address & 0x1FFF] = value
             n = addr >> 2
             if n < 4 :
                 self.ChannelWrite[n] = 1
@@ -1115,13 +1144,24 @@ class CPU6502(object):
             self.PPU.Write(address,value)
 
             self.DMA(514) #unsupport????why
+
             
-        elif addr in (0x16,0x17):
+            
+        elif addr == 0x16:
 
             self.JOYPAD.Write(addr,value)
+            
+        elif addr ==0x17:
 
+            self.JOYPAD.Write(addr,value)
+            self.Sound[addr] = value
+
+        elif addr== 0x18:
+
+            self.Sound[addr] = value
         else:
-            pass
+            self.MAPPER.ExWrite(addr,value)
+        
 
     
     def MapperWrite(self,address, value):
@@ -2116,7 +2156,7 @@ class CPU6502(object):
             self.ADD_CYCLE(4);
         
 def jit_CPU_class(addition_spec, jit = True):
-    return jitObject(CPU6502, addition_spec, jit = jit)
+    return jitObject(CPU6502, cpu_spec, addition_spec, jit = jit)
 
 def load_CPU(MMU,PPU,addition_spec,jit = True):
     cpu_class = jit_CPU_class(addition_spec,jit = jit)
@@ -2134,10 +2174,12 @@ cpu_spec = []
 if __name__ == '__main__':
     #cpu_ram = Memory()
     
-    #cpu6502 = jitObject(cpu6502, cpu_spec)
+    cpu = jit_CPU_class({ 'PPU': jitType(PPU)})
+
+    #cpu6502(MMU(),PPU(PPUREG(MMU())))
     
-    cpu = CPU6502()
-    print(cpu)
+    #cpu = cpu6502()
+    #print(cpu)
     #CPU = jit_CPU_class(CPU6502,{})
     #print(CPU)
     

@@ -5,7 +5,7 @@ def Log_SYS(*args):
     print(print_now(),'SYSTEM:',' '.join(args))
 
 def Log_HW(*args):
-    print(print_now(),'HARDWARE:',args)
+    print(print_now(),'HARDWARE:',' '.join(args))
  
 def print_now():
     return time.strftime("%b %d %H:%M:%S", time.localtime())

@@ -142,7 +142,13 @@ class PPUREG(object):
     def PPU_MEM_TYPE(self):
         return self.MMU.PPU_MEM_TYPE
     
-
+    def reset(self):
+        self.reg[:] = 0
+        self.ScrollToggle = 0
+        self.loopy_x = 0
+        self._loopy_v = 0
+        self._loopy_t = 0
+        
     def read(self,address):
         if address == 0x2002:
             return self.PPUSTATUS

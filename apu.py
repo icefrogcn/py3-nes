@@ -81,7 +81,6 @@ class APU(object):
         self.lastFrame = np.zeros(nVolumeChannel,np.uint16)#[0] * 4
         self.stopTones = np.zeros(nVolumeChannel,np.uint8)#[0] * 4
         #self.ChannelWrite = np.zeros(nVolumeChannel,np.uint8)#[0] * 4
-        self.ChannelWrite = MMU.ChannelWrite
         #self.SoundChannel = np.zeros(0x4,np.uint8)#np.zeros((0x4),dtype = "u1, f4, u1")
         
         #self.tonesBuffer = np.zeros(0x4,np.float32)#[0] * 4
@@ -95,7 +94,6 @@ class APU(object):
         self.Frames = 0
 
         
-        self.Sound = MMU.RAM[2][0:0x100]
         #self.Sound = [0] * 0x16 #(0 To 0x15)
         #self.SoundCtrl = self.Sound[0x15]
         
@@ -125,7 +123,13 @@ class APU(object):
         self.midiout.send_message([0xC1,80]) #'Square wave'
         self.midiout.send_message([0xC2,43]) #Triangle wave
         self.midiout.send_message([0xC3,127]) #Noise. Used gunshot. Poor but sometimes works.'
-
+    @property
+    def Sound(self):
+        return self.MMU.RAM[2][0:0x100]
+    @property
+    def ChannelWrite(self):
+        return self.MMU.ChannelWrite
+                
     @property
     def SoundCtrl(self):
         return self.Sound[0x15]

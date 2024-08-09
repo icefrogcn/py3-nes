@@ -104,6 +104,7 @@ class MAPPER():
         self.irq_preset = 0;
         self.irq_preset_vbl = 0;
 
+        #IRQ_CLOCK == 1
         self.irq_type = 0
         
         return 1

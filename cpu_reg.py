@@ -46,21 +46,7 @@ class CPU_Reg(object):
         
 CPU_reg_type = nb.deferred_type()
 CPU_reg_type.define(CPU_Reg.class_type.instance_type)
-'''
-reg = CPU_Reg()
-@jitclass([('A',uint8),
-           ])
-class test(object):
-    def __init__(self):
-        pass
-        self.A = 0
-        #self.reg = reg
 
-    def add1(self):
-        #reg = self.reg
-        pass
-        reg.PC += 1
-        '''
                     
 if __name__ == '__main__':
 

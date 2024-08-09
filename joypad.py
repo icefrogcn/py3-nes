@@ -24,7 +24,7 @@ spec = [('Joypad',uint8[:]),
 @jitclass(spec)
 class JOYPAD(object):
     
-    def __init__(self,debug = False):
+    def __init__(self):
         #self.consloe = consloe
         self.Joypad = np.full(0x8,0x40,np.uint8)
         self.padbit = np.zeros(0x4, np.uint16)

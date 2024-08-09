@@ -114,8 +114,8 @@ class MAPPER(object):
         elif self.Mapper == 23:
             self.MAPPER23.Write(addr,data)
         else:
-            print('Write mapper',self.Mapper)
-        pass
+            #print('Write mapper',self.Mapper)
+            pass
             
     def Read(self,address):#$8000-$FFFF Memory read(Dummy)
         try:
@@ -126,7 +126,7 @@ class MAPPER(object):
                 if hasattr(self.MAPPER2,'Read'):return self.MAPPER2.Read(address)
                 
             elif self.Mapper == 4:
-                print('Read mapper 4')
+                #print('Read mapper 4')
                 return self.MAPPER4.Read(address)
         except:
             print(f'Read mapper {self.Mapper} Failed')
@@ -136,7 +136,7 @@ class MAPPER(object):
     def ReadLow(self,address):#$4100-$7FFF Lower Memory read
         if self.Mapper == 19:
             return self.MAPPER19.ReadLow(address)
-        print('ReadLow mapper 4')
+        #print('ReadLow mapper 4')
         return self.MMC.ReadLow(address)
 
     def WriteLow(self,address,data): #$4100-$7FFF Lower Memory write
@@ -145,15 +145,15 @@ class MAPPER(object):
         elif self.Mapper == 19:
             self.MAPPER19.WriteLow(address,data)
         else:
-            print('WriteLow mapper 4')
+            #print('WriteLow mapper 4')
             self.MMC.WriteLow(address,data)
     
     def ExRead(self,address): #$4018-$40FF Extention register read/write
-        print('ExRead mapper')
+        #print('ExRead mapper')
         return self.MMC.ExRead(address)
     
     def ExWrite(self, address, data ):
-        print('ExWrite mapper')
+        #print('ExWrite mapper')
         self.MMC.ExWrite(address,data)
     
     def Clock(self, cycle ):

@@ -3,15 +3,40 @@ import os,re
 
 import time
 import datetime
-import numpy as np
-import numba as nb
+
 
 from numba.experimental import jitclass
 from numba import uint8,uint16,uint32
 from numba.typed import Dict
 from numba import types
+import numpy as np
+import numba as nb
 
-import mmu
+from deco import *
+from jitcompile import jitObject,jitType
+
+Log_SYS('import ROM class')
+from rom import ROM
+
+
+Log_SYS('import MMU class')
+from mmu import MMU
+
+
+Log_SYS('import MAPPER class')
+from mmc import MMC
+from mapper import MAPPER
+
+
+Log_SYS('import PPU CLASS')
+from ppu_reg import PPUREG, PPUBIT
+from ppu import PPU, load_PPU, jit_PPU_class
+
+Log_SYS('import CPU CLASS')
+from cpu import CPU6502, cpu_spec,jit_CPU_class
+CPU = jit_CPU_class({ 'PPU': jitType(PPU)})
+
+
 
 #import rom
 
@@ -20,132 +45,196 @@ ScanlineCycles = 1364
 HDrawCycles = 1024
 
 
-nes_spec = [('NES_scanline',uint16),
-            ]
-class NES(object):       
+nes_spec = [
+    ]
+#@jitclass
+class NES(object):
+    jit:uint8
+    
+    MMU:MMU
+    MMC:MMC
+    MAPPER:MAPPER
+    
+    PPUREG:PPUREG
+    PPU:PPU
+    CPU:CPU
+    NES_scanline:uint16
+    
+    def __init__(self,
+                 ROM = ROM(),
+                 jit = 1):
 
-    def __init__(self,debug = False):
+        self.jit = jit
+
+        self.MMU = MMU(ROM)
+        print(self.MMU)
+        
+        self.MMC = MMC(self.MMU)
+        print(self.MMC)
+        
+        self.MAPPER = MAPPER(self.MMC)
+        print(self.MAPPER)
+        
+        #self.PPUREG = PPUREG(self.MMU)
+        #print(self.PPUREG)
+        
+        self.PPU = PPU(PPUREG(self.MMU))
+        print(self.PPU)
+        
+        self.CPU = CPU(self.MMU, self.PPU)
+        print(self.CPU)
         
         self.NES_scanline = 0
 
-        FirstRead = True
-
-        self.debug = False
+        
+        
+    @property
+    def RAM(self):
+        return self.MMU.RAM
+    @property
+    def ROM(self):
+        return self.MMU.ROM
 
     def RenderMethod(self):
         return 0
+
+    def PowerON(self):
+        print('RESET')
+        self.MMU.reset()
+
+        self.MMC.reset()
+        self.MAPPER.reset()
+
+        print(self.CPU.RAM)
+        print(type(self.CPU.RAM))
     
-    def EmulateFrame(self):
+    def EmulateFrame(self,isDraw=1):
         scanline = 0
-
-        #cheatCODE
-        
-        self.NES_scanline = scanline
-
-        if( self.RenderMethod != TILE_RENDER ):
-            while True:
-                #self.PPU.SetRenderScanline( scanline )
-                
+        while True:
+            if( self.RenderMethod != TILE_RENDER ):
                 if scanline == 0:
                     if( self.RenderMethod < POST_RENDER ):
-                        self.CPU.EmulationCPU(ScanlineCycles)
-                        #ppu->FrameStart();
-			#ppu->ScanlineNext();
-                        if self.MAPPER.HSync(scanline):self.CPU.IRQ_NotPending()
-                        #ppu->ScanlineStart();
+                        self.EmulationCPU(ScanlineCycles)
+                        self.PPU.FrameStart()
+                        self.PPU.ScanlineNext()
+                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
+                        self.PPU.ScanlineStart()
                     else:
                         self.EmulationCPU(HDrawCycles)
-                        #ppu->FrameStart();
-			#ppu->ScanlineNext();
-                        if self.MAPPER.HSync(scanline):self.CPU.IRQ_NotPending()
-                        self.CPU.EmulationCPU(FETCH_CYCLES*32)
-                        #ppu->ScanlineStart();
-                        self.CPU.EmulationCPU(FETCH_CYCLES*10 + 4 )
-
+                        self.PPU.FrameStart()
+                        self.PPU.ScanlineNext()
+                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
+                        self.EmulationCPU(FETCH_CYCLES*32)
+                        self.PPU.ScanlineStart()
+                        self.EmulationCPU( FETCH_CYCLES*10 + 4 )
+                    
                 elif scanline < 240:
                     if( self.RenderMethod < POST_RENDER ):
                         if( self.RenderMethod == POST_ALL_RENDER ):
-                            self.CPU.EmulationCPU(ScanlineCycles)
-                        #self.PPU.Scanline()
-
-                        #ppu->ScanlineNext();
+                            self.EmulationCPU(ScanlineCycles)
+                        if isDraw:
+                            self.PPU.RenderScanline(scanline)
+                        self.PPU.ScanlineNext()
                         if( self.RenderMethod == PRE_ALL_RENDER ):
-                            self.CPU.EmulationCPU(ScanlineCycles )
+                            self.EmulationCPU(ScanlineCycles )
                             
-                        if self.MAPPER.HSync(scanline):self.CPU.IRQ_NotPending()
-                        #ppu->ScanlineStart();
+                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
+                        self.PPU.ScanlineStart()
                     else:
                         if( self.RenderMethod == POST_RENDER ):
-                            self.CPU.EmulationCPU(HDrawCycles)
-                        #self.PPU.Scanline()
+                            self.EmulationCPU(HDrawCycles)
+                        if isDraw:
+                            self.PPU.RenderScanline(scanline)
 
                         if( self.RenderMethod == PRE_RENDER ):
                             self.EmulationCPU(HDrawCycles)
 
-                        #ppu->ScanlineNext();
-                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
-                        self.CPU.EmulationCPU(FETCH_CYCLES*32)
-                        #ppu->ScanlineStart();
-                        self.CPU.EmulationCPU(FETCH_CYCLES*10 + 4 )
+                        self.PPU.ScanlineNext()
 
+                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
+                        self.EmulationCPU(FETCH_CYCLES*32)
+                        self.PPU.ScanlineStart()
+                        self.EmulationCPU(FETCH_CYCLES*10 + 4 )
+
+
+
+                    
                 elif scanline == 240:
                     #mapper->VSync()
-                    if( self.RenderMethod == POST_RENDER ):
-                        self.CPU.EmulationCPU(ScanlineCycles)
-                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
-                    else:
-                        self.CPU.EmulationCPU(HDrawCycles)
-                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
-                        self.CPU.EmulationCPU(HBlankCycles)
+                    #self.isDraw = 1
                     
-                    #self.Frames += 1
+                    if( self.RenderMethod == POST_RENDER ):
+                        self.EmulationCPU(ScanlineCycles)
+                        if self.MAPPER.HSync( scanline ):self.IRQ_NotPending()
+                    else:
+                        self.EmulationCPU(HDrawCycles)
+                        if self.MAPPER.HSync( scanline ):self.IRQ_NotPending()
+                        self.EmulationCPU(HBlankCycles)
+                        
+                    self.Frames += 1
+                    
                     
                 elif scanline <= 261: #VBLANK
-
+                    self.isDraw = 0
                         
-                    if self.PPU.CurrentLine == 261:
+                    if scanline == 261:
                         self.PPU.VBlankEnd()
-                        self.FrameFlag |= self.FRAME_RENDER
-
-                    if( self.RenderMethod == POST_RENDER ):
+                        
+                    if( self.RenderMethod < POST_RENDER ):
                         if scanline == 241:
                             self.PPU.VBlankStart()
-                            self.CPU.EmulationCPU_BeforeNMI(4*12)
+                            self.EmulationCPU_BeforeNMI(4*12)
                             if self.PPU.reg.PPUCTRL & 0x80:
-                                self.CPU.NMI()
-                            self.CPU.EmulationCPU(ScanlineCycles-(4*12))
+                                self.NMI()
+                            self.EmulationCPU(ScanlineCycles-(4*12))
                         else:
-                            self.CPU.EmulationCPU(ScanlineCycles)
+                            self.EmulationCPU(ScanlineCycles)
 
-                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
+                        if self.MAPPER.HSync( scanline ):self.IRQ_NotPending()
                     else:
                         if scanline == 241:
                             self.PPU.VBlankStart()
-                            self.CPU.EmulationCPU_BeforeNMI(4*12)
+                            self.EmulationCPU_BeforeNMI(4*12)
                             if self.PPU.reg.PPUCTRL & 0x80:
-                                self.CPU.NMI()
-                            self.CPU.EmulationCPU(HDrawCycles-(4*12))
+                                self.NMI()
+                            self.EmulationCPU(HDrawCycles-(4*12))
                         else:
-                            self.CPU.EmulationCPU(HDrawCycles)
-                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
-                        self.CPU.EmulationCPU(HBlankCycles)
+                            self.EmulationCPU(HDrawCycles)
+                        if self.MAPPER.HSync( scanline ):self.IRQ_NotPending()
+                        self.EmulationCPU(HBlankCycles)
 
-                    if self.scanline == 262:
+                    if scanline == 261:
+                        scanline = 0
                         return 1
-                        #self.PPU.CurrentLine_ZERO()
-                        #return 0
-
                 scanline += 1
 
-                self.NES_scanline = scanline
-                #self.PPU.CurrentLine_increment(1)
+def jit_NES_class(jit = 1):
+    CPU_type = jitType(CPU)
+    
+    NES_spec = {
+            'CPU': CPU_type
+            }
+    
+    return jitObject(NES, NES_spec , jit = jit)
 
-        
+def load_NES(jit = 1):
+    nes_class, nes_type = import_NES_class(jit = jit)
+    return nes_class, nes_type        
 
 
 
 if __name__ == '__main__':
-    pass
+    from rom import nesROM
+    ROM = nesROM().LoadROM('roms//1942.nes')
+    #jit_CPU_class({ 'PPU': jitType(PPU)})
+    #CPU = jit_CPU_class({ 'PPU': jitType(PPU)})
+    nes = NES(ROM)
+    print(nes)
+    #PPU = jit_PPU_class()
+    #CPU = jit_CPU_class({})
+    nesc = jit_NES_class()
+    print(nesc)
+    #nesj = nesc(ROM)
 
     
     

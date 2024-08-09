@@ -24,7 +24,7 @@ from wrfilemod import read_file_to_array
 Log_SYS('import MMU class')
 from mmu import MMU
 Log_SYS('import ROM class')
-from rom import nesROM
+from rom import LoadROM
 from rom import get_Mapper_by_fn
 
 Log_SYS('import CPU CLASS')
@@ -64,7 +64,7 @@ class CONSLOE():
     
         self.debug = debug
         self.jit = jit
-        self.nesROM = nesROM()
+        #self.nesROM = nesROM()
 
         self.SoundData = []
         
@@ -73,9 +73,6 @@ class CONSLOE():
         #self.JOYPAD = JOYPAD()
         #self.JOYPAD2 = JOYPAD()
 
-        #self.FrameBuffer = np.zeros((720, 768, 3),np.uint8)
-               
-        #self.CPURunning = cpu6502.CPURunning
         
     @property
     def RAM(self):
@@ -87,7 +84,7 @@ class CONSLOE():
 
 
     def LoadROM(self,filename):
-        self.ROM = self.nesROM.LoadROM(filename)
+        self.data = LoadROM(filename)
         #self.Mapper = self.ROM.Mapper
 
     def LoadCheatCode(self,filename):
@@ -125,7 +122,7 @@ class CONSLOE():
         self.PPU, self.PPU_type = load_PPU(self.MMU, jit = self.jit)
         print(self.PPU)
         Log_SYS('init PPU')
-        self.PPU.pPPUinit(self.PPU_Running,self.PPU_render,self.PPU_debug)
+        #self.PPU.pPPUinit(self.PPU_Running,self.PPU_render,self.PPU_debug)
             
     def Load_CPU(self):
         Log_SYS('Load CPU')
@@ -136,28 +133,39 @@ class CONSLOE():
         self.CPU, self.CPU_type = load_CPU(self.MMU, self.PPU, addition_spec, jit = self.jit)
         Log_SYS('init CPU')
        
+    def PowerON(self):
+        self.CPURunning = True
 
-    
-    def StartingUp(self):
-
-        try:
-            self.MMU = MMU(self.ROM)
-            Log_SYS('RESET')
-            self.MMU.reset()
-            print(self.MMU)
-            Log_SYS('init APU')
-            self.APU = APU(self.MMU)
+    def initHW(self):
+        self.MMU = MMU()
+        print(self.MMU)
         
-            self.MMC = MMC(self.MMU)
-            print(self.MMC)
-            self.MAPPER = MAPPER(self.MMC)
-            print(self.MAPPER)
-            self.Load_PPU()
-            self.Load_CPU()
+        Log_SYS('init APU')
+        self.APU = APU(self.MMU)
+        print(self.APU)
+        
+        self.MMC = MMC(self.MMU)
+        print(self.MMC)
+        self.MAPPER = MAPPER(self.MMC)
+        print(self.MAPPER)
+        self.Load_PPU()
+        self.Load_CPU()
+
+
             
-            
+    def StartingUp(self):
+        
+        try:
+            self.MMU.ROM.data = self.data
+            self.MMU.ROM.info()
+
+            Log_HW('RESET')
+        
+        
+            self.MMU.reset()
             self.MMC.reset()
             self.MAPPER.reset()
+            self.PPU.reset()
             
             LoadNES = 1
             #Log_SYS("NEW MAPPER process")
@@ -218,7 +226,7 @@ class CONSLOE():
     def run(self):
         blit_delay = 0
         self.realFrames = 0
-        wish_fps = 50
+        wish_fps = 60
         frame_period = 1.000 / wish_fps
         start = time.time()
         exec_cycles = 0
@@ -226,6 +234,7 @@ class CONSLOE():
         Frames = 0
         nowframe = 1
         isDraw = 1
+        self.blit = 1
         while self.Running:
             #t = threading.Thread(target = self.CPU.exec6502)
             #t.start()
@@ -239,8 +248,9 @@ class CONSLOE():
             if True:#Flag == self.CPU.FrameSound:
                 pass
             #Log_HW('Play Sound')
-            if isDraw:
+            if self.blit == 1 and isDraw:
                 self.blitFrame()
+                #self.thread_show(self.blitFrame)
                 self.realFrames += 1
 
             self.APU.updateSounds(self.CPU.Frames)
@@ -257,23 +267,9 @@ class CONSLOE():
                 isDraw = 1
             else:
                 isDraw = 0
-            #nowframe += 1
+            
     
-            '''
-            if True:#Flag == self.CPU.FRAME_RENDER:
-                #self.CPU.FrameRender_ZERO()
-                #Frames = self.CPU.Frames
-                if forceblit or Frames % wish_fps == 0 or blit_delay/((Frames % wish_fps) + 1) <= (1.000/wish_fps):
-                    self.blitFrame()
-                    self.realFrames += 1
 
-                blit_delay += (time.time() - start)
-                
-
-                if Frames % wish_fps == wish_fps - 1:
-                    blit_delay = 0
-                start = time.time()
-            '''
 
                    
 
@@ -309,6 +305,7 @@ class CONSLOE():
         Log_SYS('jitclass compiled...')
             
     def blitFrame(self):
+        self.blit = 0
         if self.PPU_Running:
             if self.CPU.Frames:
                 if self.PPU_render:
@@ -322,13 +319,14 @@ class CONSLOE():
                     else:
                         self.blitPal()
                         
-                    return self.blitScreen()
-
+                    self.blitScreen()
+        self.blit = 1
+        
     def blitFrame_thread(self):
-        while True:
+        #while True:
             #print('blit thread',self.CPU.isDraw,self.CPU.Frames,self.CPU.clockticks6502)
-            if self.CPU.isDraw:
-                self.CPU.isDraw = 0
+            #if self.CPU.isDraw:
+                #self.CPU.isDraw = 0
                 
                 if self.debug:
                         pass
@@ -367,8 +365,8 @@ class CONSLOE():
     def ShutDown(self):
         if self.PPU_render:
             cv2.destroyAllWindows()
-        if self.APU.available_ports:
-            self.APU.midiout.close_port()
+        #if self.APU.available_ports:
+            #self.APU.midiout.close_port()
         
             
     def blitScreen(self):
@@ -391,12 +389,12 @@ class CONSLOE():
         cv2.waitKey(1)
         
     def ShowFPS(self):
-        while self.CPU.Frames == 0:
-            pass
+            while self.CPU.Frames == 0:
+                pass
             
-        start = time.time()
-        totalFrame = 0
-        while self.Running:
+            start = time.time()
+            totalFrame = 0
+            #while self.Running:
             time.sleep(5)
             if self.CPU.Frames > 1 and self.CPU.Frames == totalFrame:break
             nowFrames = self.CPU.Frames
@@ -409,8 +407,12 @@ class CONSLOE():
             self.realFrames = 0
             print(FPS, nowFrames, self.CPU.FrameFlag,self.APU.ChannelWrite, self.CPU.clockticks6502)#,self.CPU.PPU.render,self.CPU.PPU.tilebased
             print(self.PPU.Palettes)
+            print(self.APU.Sound)
             
             totalFrame = nowFrames
+
+            if self.Running:
+                self.ShowFPS()
         
 
             
@@ -466,7 +468,7 @@ def paintBuffer(FrameBuffer,Pal,Palettes):
 
 
 ROMS_DIR = os.getcwd()+ '\\roms\\'
-#ROMS_DIR = 'F:\\individual_\\Amuse\\EMU\FCSpec\\'
+#ROMS_DIR = 'F:\\individual_\\Amuse\\EMU\FCSpec\\' 
 
 def roms_list():
     return [item for item in os.listdir(ROMS_DIR) if ".nes" in item.lower()]
@@ -518,8 +520,8 @@ if __name__ == '__main__':
     #run(debug = True)
     ROMS = roms_list()
     ROMS_INFO = get_roms_mapper(ROMS)
-    fc = CONSLOE(1, jit = 1)
-
+    fc = CONSLOE(0, jit = 1)
+    fc.initHW()
     while True:
         show_choose(ROMS_INFO)
         gn = input("choose a number: ")

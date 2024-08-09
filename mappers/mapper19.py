@@ -25,10 +25,13 @@ class MAPPER(object):
     MMC: MMC
     reg:uint8[:]
     exram:uint8[:]
+    
     irq_enable:uint8
-    irq_counter:uint8
+    irq_counter:uint16
+    
     exsound_enable:uint8
     patch:uint8
+    
     RenderMethod:uint8
     
     def __init__(self,MMC = MMC()):
@@ -53,8 +56,13 @@ class MAPPER(object):
         self.MMC.SetPROM_32K_Bank(0, 1, self.MMC.PROM_8K_SIZE-2, self.MMC.PROM_8K_SIZE-1 )
 
         if( self.MMC.VROM_1K_SIZE >= 8 ):
-            self.MMC.SetVROM_8K_Bank( self.MMC.VROM_8K_SIZE - 1 );
+            self.MMC.SetVROM_8K_Bank( self.MMC.VROM_8K_SIZE - 1 )
+            
         self.exsound_enable = 0xFF
+
+        if self.exsound_enable:
+            self.MMC.SelectExSound(0x10)
+        
         return 1
 
     def ReadLow(self,address):
@@ -62,8 +70,10 @@ class MAPPER(object):
         addr = address & 0xF800
         if addr in (0x6000,0x6800,0x7000,0x7800):
             return self.MMC.ReadLow(address)
+        
         elif addr == 0x4800:
             if self.exsound_enable:
+                self.MMC.ExRead(address)
                 data = self.exram[self.reg[2]&0x7F]
             else:
                 data = self.MMC.WRAM[self.reg[2]&0x7F]
@@ -71,23 +81,19 @@ class MAPPER(object):
                 self.reg[2] = (self.reg[2] + 1 )|0x80
             return data
         elif addr == 0x5000:
-            return self.irq_counter & 0x00FF
+            return uint8(self.irq_counter & 0x00FF)
         elif addr == 0x5800:
-            return (self.irq_counter >> 8 ) & 0x7F
+            return uint8((self.irq_counter >> 8 ) & 0x7F)
             
-        return addr>>8
+        return uint8(addr>>8)
             
     def WriteLow(self,address,data):
         #print "WriteLow 19"
         addr = address & 0xF800
-        if addr == 0x5800:
-            #print "irq_enable try"
-            self.irq_counter = (self.irq_counter & 0x00FF) | ((data & 0x7F) << 8)
-            self.irq_enable  = data & 0x80
-            if self.irq_enable:
-                self.irq_counter += 1
-        elif addr == 0x4800:
+        
+        if addr == 0x4800:
             if self.exsound_enable:
+                self.MMC.ExWrite(address, data )
                 self.exram[self.reg[2]&0x7F] = data
             else:
                 self.MMC.WRAM[self.reg[2]&0x7F] = data
@@ -95,9 +101,17 @@ class MAPPER(object):
                 self.reg[2] = (self.reg[2] + 1 )|0x80
             
         elif addr == 0x5000:
-            self.irq_counter = (self.irq_counter & 0x00FF) | data
+            self.irq_counter = (self.irq_counter & 0xFF00) | uint16(data)
             if self.irq_enable:
                 self.irq_counter += 1
+                
+        elif addr == 0x5800:
+            #print "irq_enable try"
+            self.irq_counter = (self.irq_counter & 0x00FF) | uint16((data & 0x7F) << 8)
+            self.irq_enable  = data & 0x80
+            if self.irq_enable:
+                self.irq_counter += 1
+                
             
         elif addr in (0x6000,0x6800,0x7000,0x7800):
             return self.MMC.WriteLow(address,data)
@@ -193,13 +207,13 @@ class MAPPER(object):
             self.MMC.SetPROM_8K_Bank( 6, data & 0x3F )
 
         elif addr == 0xF800:
-            if self.exsound_enable:
-                #print "apu_ExWrite"
-                return 1
-            self.reg[2] = data
+            if address == 0xF800:
+                if self.exsound_enable:
+                    #print "apu_ExWrite"
+                    self.MMC.ExWrite(address,data)   
+                #return 1
+                self.reg[2] = data
             
-    def HSync(self,scanline):
-        return False
 
     def Clock(self,cycles):
         if( self.irq_enable):
