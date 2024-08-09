@@ -55,24 +55,17 @@ class MAPPER(object):
         #self.M_List.append(self.MAPPER2)
         
     @property
+    def ROM(self):
+        return self.MMC.ROM
+
+    @property
     def Mapper(self):
         return self.MMC.Mapper
 
     @property
     def RenderMethod(self):
         return self.MMC.RenderMethod
-    '''
-    @property
-    def Ma(self):
-        if self.Mapper == 0:
-            return self.MAPPER0
-        
-        else:# self.Mapper == 2:
-            return self.MAPPER2
-        #else:
-        #    print('Unsupport mapper',self.Mapper)
-            #return None
-    '''
+
 
     
     def reset(self):
@@ -103,7 +96,7 @@ class MAPPER(object):
         if self.Mapper == 0:
             if hasattr(self.MAPPER0,'Write'):self.MAPPER0.Write(addr,data)
         
-        if self.Mapper == 1:
+        elif self.Mapper == 1:
             if hasattr(self.MAPPER1,'Write'):self.MAPPER1.Write(addr,data)
         
         elif self.Mapper == 2:
@@ -133,6 +126,7 @@ class MAPPER(object):
                 if hasattr(self.MAPPER2,'Read'):return self.MAPPER2.Read(address)
                 
             elif self.Mapper == 4:
+                print('Read mapper 4')
                 return self.MAPPER4.Read(address)
         except:
             print(f'Read mapper {self.Mapper} Failed')
@@ -142,21 +136,24 @@ class MAPPER(object):
     def ReadLow(self,address):#$4100-$7FFF Lower Memory read
         if self.Mapper == 19:
             return self.MAPPER19.ReadLow(address)
-        
+        print('ReadLow mapper 4')
         return self.MMC.ReadLow(address)
 
     def WriteLow(self,address,data): #$4100-$7FFF Lower Memory write
         if self.Mapper == 2:
             self.MAPPER2.WriteLow(address,data)
-        if self.Mapper == 19:
+        elif self.Mapper == 19:
             self.MAPPER19.WriteLow(address,data)
         else:
+            print('WriteLow mapper 4')
             self.MMC.WriteLow(address,data)
     
     def ExRead(self,address): #$4018-$40FF Extention register read/write
+        print('ExRead mapper')
         return self.MMC.ExRead(address)
     
     def ExWrite(self, address, data ):
+        print('ExWrite mapper')
         self.MMC.ExWrite(address,data)
     
     def Clock(self, cycle ):
@@ -174,26 +171,27 @@ class MAPPER(object):
             return self.MAPPER4.HSync(scanline)
         return False
 
-    @property
-    def MAPPERS(self):
-        m = [self.MAPPER0,
+    #@property
+    def MAPPERS(self,mapper):
+        '''m = [self.MAPPER0,
         self.MAPPER1,
         self.MAPPER2,
         self.MAPPER3,
         self.MAPPER4,
         self.MAPPER19,
         self.MAPPER23
-            ]
-        '''
-        if self.Mapper == 0:
-            return self.MAPPER0
-        elif self.Mapper == 1:
-            return self.MAPPER1
-        elif self.Mapper == 2:
-            return self.MAPPER2
-        elif self.Mapper == 3:
-            return self.MAPPER3'''
-        return m[0]
+            ]'''
+        
+        if mapper == 0:
+            m = self.MAPPER0
+        elif mapper == 1:
+            m = self.MAPPER1
+        elif mapper == 2:
+            m = self.MAPPER2
+        elif mapper == 3:
+            m = self.MAPPER3
+
+        return m
 
     def resetn(self):
         self.MAPPERS().reset()
@@ -204,9 +202,12 @@ class MAPPER(object):
 if __name__ == '__main__':
     #mapper = import_MAPPER()
     #print(mapper)
-    from rom import ROM ,nesROM
+    from rom import LoadROM
     from mmu import MMU
-    mmc = MMC(MMU(nesROM().LoadROM('roms//kage.nes')))
+    data = LoadROM('roms//kage.nes')
+    MMU = MMU()
+    MMU.ROM.data = data
+    mmc = MMC(MMU)
     m = MAPPER(mmc)
     #m = MAPPER()
     
