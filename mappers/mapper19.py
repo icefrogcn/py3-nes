@@ -62,7 +62,8 @@ class MAPPER(object):
 
         if self.exsound_enable:
             self.MMC.SelectExSound(0x10)
-        
+
+        self.reg[:] = 0
         return 1
 
     def ReadLow(self,address):
@@ -99,18 +100,19 @@ class MAPPER(object):
                 self.MMC.WRAM[self.reg[2]&0x7F] = data
             if self.reg[2]&0x80:
                 self.reg[2] = (self.reg[2] + 1 )|0x80
+                self.reg[2] = ((self.reg[2] & 0x7F) + 1 )|0x80
             
         elif addr == 0x5000:
             self.irq_counter = (self.irq_counter & 0xFF00) | uint16(data)
-            if self.irq_enable:
-                self.irq_counter += 1
+            #if self.irq_enable:            #----- remove
+                #self.irq_counter += 1
                 
         elif addr == 0x5800:
             #print "irq_enable try"
             self.irq_counter = (self.irq_counter & 0x00FF) | uint16((data & 0x7F) << 8)
             self.irq_enable  = data & 0x80
-            if self.irq_enable:
-                self.irq_counter += 1
+            #if self.irq_enable:             #----- remove
+                #self.irq_counter += 1
                 
             
         elif addr in (0x6000,0x6800,0x7000,0x7800):
@@ -220,6 +222,7 @@ class MAPPER(object):
             self.irq_counter += cycles
             if(self.irq_counter >= 0x7FFF ):
                 self.irq_counter = 0x7FFF
+                self.irq_enable = 0  #------------- 
                 return True
         return False
 
