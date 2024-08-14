@@ -48,6 +48,7 @@ class PPU(object):
     ATarray:uint8[:,::1]
     #NT_BANK:ListType(uint8[::1])
 
+    ScreenBuffer:uint8[:,:,::1]
     FrameBuffer:uint8[:,:,::1]
     Running:uint8
     render:uint8
@@ -73,6 +74,7 @@ class PPU(object):
         self.Pal        = BGRpal
 
         self.ScreenArray = np.zeros((240, 256),np.uint8)
+        self.ScreenBuffer = np.zeros((240, 256, 3),np.uint8)
         self.ATarray = np.zeros((256, 256),np.uint8)
         #self.NT_BANK = List([np.zeros((240, 256),np.uint8) for i in range(4)])
 
@@ -633,6 +635,12 @@ class PPU(object):
                                 BGbuffer[spriteY + j, spriteX + i] = SpriteArr[j,i]
 
 
+    #@njit
+    def paintScreen(self,isDraw = 1):
+        if isDraw:
+            for i in range(240):
+                for j in range(256):
+                    self.ScreenBuffer[i, j] = self.Pal[self.Palettes[self.ScreenArray[i, j]]]
 
 #PPU
 #PPU_Memory_type = nb.deferred_type()
