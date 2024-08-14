@@ -746,22 +746,7 @@ class CPU6502(object):
     def implied6502(self):
         return
 
-    @property
-    def status(self):
-        return self.PC,self.exec_cycles,self.PPU.reg.PPUSTATUS,self.Frames,self.PPU.CurrentLine,self.A,self.X,self.Y,self.S,self.P,self.opcode
 
-    def log(self,*args):
-        if self.debug:
-            pass
-        #print(args)
-
-
-
-    @property
-    def ttime(self):
-        with objmode(time1='f8'):
-            time1 = time.time()
-        return time1
 
     def FrameRender_ZERO(self):
         self.FrameFlag &= ~self.FrameRender
@@ -1031,6 +1016,11 @@ class CPU6502(object):
 
         #"DF: reordered the the elif opcode =='s. Made address long (was variant)."
     
+
+    @property
+    def status(self):
+        "PC:%d,clockticks:%d PPUSTATUS:%d,Frames %d,CurrLine:%d a:%d X:%d Y:%d S:%d p:%d opcode:%d "
+        return self.PC,self.exec_cycles,self.PPU.reg.PPUSTATUS,self.Frames,self.PPU.CurrentLine,self.A,self.X,self.Y,self.S,self.P,self.opcode
       
 
     def reset6502(self):
