@@ -7,7 +7,7 @@ import numpy as np
 import numba as nb
 from numba import jit
 from numba.experimental import jitclass
-from numba import uint8,uint16,int8,int32,float32
+from numba import uint8,uint16,uint32,int8,int32,float32
 from numba.typed import Dict
 from numba import types
 
@@ -36,7 +36,7 @@ CpuClock = 1789772.5
 nRate	= 22050
 cycle_rate = int((CpuClock * 65536)/nRate)
 #print 'cycle_rate:',cycle_rate
-#ChannelWrite = np.zeros(0x4,np.uint8)
+
 '''
 	//  0:Master
 	//  1:Rectangle 1
@@ -53,7 +53,7 @@ cycle_rate = int((CpuClock * 65536)/nRate)
 '''
 nVolumeChannel = 0x10
 #APU
-spec = [('tones',float32[:]),
+'''spec = [('tones',float32[:]),
         ('volume',uint16[:]),
         #('v',uint16[:]),
         ('lastFrame',uint16[:]),
@@ -67,62 +67,53 @@ spec = [('tones',float32[:]),
         ('Sound',uint8[:]),
         ('doSound',uint8),
         ('vlengths',uint8[:]),
-        ('pow2',int32[:])]
-print('loading APU CLASS')
-#@jitclass(spec)
+        ('pow2',int32[:])]'''
+
+
+@jitclass()
 class APU(object):
     MMU:MMU
-    def __init__(self,MMU = MMU(), debug = False):
-        self.MMU = MMU
-        self.tones = np.zeros(nVolumeChannel,np.float32)#[0] * 4
-        self.volume = np.zeros(nVolumeChannel,np.uint16)#[0] * 4
-        #self.v = np.zeros(0x4,np.uint16)#[0] * 4
-        #self.Channel = np.zeros(0x4,np.uint16)#[0] * 4
-        self.lastFrame = np.zeros(nVolumeChannel,np.uint16)#[0] * 4
-        self.stopTones = np.zeros(nVolumeChannel,np.uint8)#[0] * 4
-        #self.ChannelWrite = np.zeros(nVolumeChannel,np.uint8)#[0] * 4
-        #self.SoundChannel = np.zeros(0x4,np.uint8)#np.zeros((0x4),dtype = "u1, f4, u1")
-        
-        #self.tonesBuffer = np.zeros(0x4,np.float32)#[0] * 4
-        #self.frameBuffer = np.zeros(0x4,np.int32)#np.zeros((0x4),dtype = "u1, f4, u1")
-        #self.SoundBuffer = np.zeros(0x4,np.dtype([('f0', 'u1'), ('f1', 'f4'), ('f2', 'u1')]))
-        #self.tones = [0] * 4
-        #self.volume = [0] * 4
-        #self.lastFrame = [0] * 4
-        #self.ChannelWrite = [0] * 4
+    
+    tones:float32[:]
+    volume:uint16[:]
+    lastFrame:uint16[:]
+    stopTones:uint8[:]
 
+    notes_on:uint8[:,::1]
+    notes_off:uint8[:,::1]
+
+    Frames:uint32
+
+    doSound:uint8
+
+    vlengths:uint8[:]
+    NoiseTP:uint16[:]
+    pow2:int32[:]
+    
+    def __init__(self,MMU = MMU()):
+        self.MMU = MMU
+        self.tones = np.zeros(nVolumeChannel,np.float32)
+        self.volume = np.zeros(nVolumeChannel,np.uint16)
+
+        self.lastFrame = np.zeros(nVolumeChannel,np.uint16)
+        self.stopTones = np.zeros(nVolumeChannel,np.uint8)
+
+        self.notes_on = np.zeros((nVolumeChannel,4),np.uint8)
+        self.notes_off = np.zeros((nVolumeChannel,4),np.uint8)
+        
         self.Frames = 0
 
-        
-        #self.Sound = [0] * 0x16 #(0 To 0x15)
-        #self.SoundCtrl = self.Sound[0x15]
-        
         self.doSound = 1
 
+        'Lookup table used by nester.'
+        #fillArray vlengths, 
         self.vlengths = np.array([5, 127, 10, 1, 19, 2, 40, 3, 80, 4, 30, 5, 7, 6, 13, 7, 6, 8, 12, 9, 24, 10, 48, 11, 96, 12, 36, 13, 8, 14, 16, 15],np.uint8) # As Long
         self.NoiseTP = np.array([4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068],np.uint16)
         'DF: powers of 2'
         self.pow2 = np.array([2**i for i in range(31)] + [-2147483648],np.int32) #*(31) #As Long
-        #pow2 = [2**i for i in range(32)]#*(31) #As Long
-        #self.pow2 +=  [-2147483648] #       pass
 
-    #def pAPUinit(self):
-        'Lookup table used by nester.'
-        #fillArray vlengths, 
-        self.midiout = rtmidi.MidiOut()
-        self.available_ports = self.midiout.get_ports()
-        print(self.available_ports)
-        #print self.midiout.getportcount()
-        
-        if self.available_ports:
-            self.midiout.open_port(0)
-        else:
-            self.midiout.open_virtual_port("My virtual output")
 
-        self.midiout.send_message([0xC0,80]) #'Square wave'
-        self.midiout.send_message([0xC1,80]) #'Square wave'
-        self.midiout.send_message([0xC2,43]) #Triangle wave
-        self.midiout.send_message([0xC3,127]) #Noise. Used gunshot. Poor but sometimes works.'
+
     @property
     def Sound(self):
         return self.MMU.RAM[2][0:0x100]
@@ -130,33 +121,12 @@ class APU(object):
     def ChannelWrite(self):
         return self.MMU.ChannelWrite
                 
-    @property
-    def SoundCtrl(self):
-        return self.Sound[0x15]
-    def SoundCtrl_W(self,value):
-        self.Sound[0x15] = value
     #@property
-    def chk_SoundCtrl(self,ch):
-        return self.SoundCtrl & (1 << ch)
-    
-    def ShutDown(self):
-        if self.available_ports:
-            self.midiout.close_port()
+    def SoundCtrl(self,ch):
+        return self.Sound[0x15] & (1 << ch)
+   
 
-    def Write(self,Address,value):
-        if Address == 0x15:
-            self.SoundCtrl_W(value)
-        else:
-            self.Sound[Address] = value
-            n = Address >> 2
-            if n < 4 :
-                self.ChannelWrite[n] = 1
-                self.SoundChannel[n] = 1
-            
-                
-    def ExWrite(self, addr, data):
-        if addr == 0x0:
-            pass
+
     def SoundChannel_ZERO(self,ch):
         self.SoundChannel[ch] = 0
     def SoundChannel_ONE(self,ch):
@@ -182,10 +152,10 @@ class APU(object):
             self.PlayTriangle(2)
             self.PlayNoise(3)
         else:
-            stopTone(0)
-            stopTone(1)
-            stopTone(2)
-            stopTone(3)
+            self.stopTone(0)
+            self.stopTone(1)
+            self.stopTone(2)
+            self.stopTone(3)
             self.ReallyStopTones()
             
 
@@ -241,7 +211,7 @@ class APU(object):
 
             
     def playfun(self, ch, frequency, volume):
-        if self.chk_SoundCtrl :
+        if self.SoundCtrl(ch) :
             #volume = v #'Get volume'
             length = self.vlengths[self.Sound[ch * 4 + 3] >> 3]#'Get length'
             if volume > 0 :
@@ -269,21 +239,27 @@ class APU(object):
 
 
     def ToneOn(self, channel, tone, volume):
-        if self.available_ports :
+        #if self.available_ports :
             if tone < 0:tone = 0 
             if tone > 255:tone = 255 
             #tone = 127 if tone > 127 else 127
             note_on = [0x90 + channel, tone, volume] # channel 1, middle C, velocity 112
-            self.midiout.send_message(note_on)
+            self.notes_on[channel][0] = 1
+            self.notes_on[channel][1:] = note_on
+            
+            #midiout.send_message(note_on)
             #'midiOutShortMsg mdh, &H90 Or tone * 256 Or channel Or volume * 65536'
 
     def ToneOff(self, channel,tone):
-        if self.available_ports :
+        #if self.available_ports :
             if tone < 0:tone = 0 
             if tone > 255:tone = 255 
             #tone = 127 if tone > 127 else 127
             note_off = [0x80 + channel, tone, 0]
-            self.midiout.send_message(note_off)
+            self.notes_off[channel][0] = 1
+            self.notes_off[channel][1:] = note_off
+            
+            #midiout.send_message(note_off)
 
 
 
@@ -292,10 +268,11 @@ class APU(object):
         if freq <= 0:
             return 0
         
-        freq = 65536 / freq
+        #freq = 65536 / freq
         #freq = 111861 / (freq + 1)
-        
-        t = math.log(freq / 8.176) / math.log(1.059463)# = 17.31236
+        f = 1789772.5/(16.0 * (freq + 1))
+        t = np.log2(f/440.0) * 12.0 + 69.0
+        #t = math.log(freq / 8.176) / math.log(1.059463)# = 17.31236
         
         if t < 0:t = 0 
         if t > 127:t = 127 
@@ -322,8 +299,6 @@ def getTone(freq):
 
         return t
 
-#APU_type = nb.deferred_type()
-#APU_type.define(APU.class_type.instance_type)
 
 '''
 MIDI instrument list. Ripped off some website I've forgotten which
@@ -472,35 +447,75 @@ def play_note(note, length, track, base_num=0, delay=0, velocity=1.0, channel=0)
     track.append(Message('note_off', note=base_note + base_num*12 + sum(major_notes[0:note]), velocity=round(64*velocity), time=round(meta_time*length), channel=channel))
     
 
+def initMidi():
+    global midiout
+    midiout = rtmidi.MidiOut()
+    available_ports = midiout.get_ports()
+    print(available_ports)
+    #print self.midiout.getportcount()
+        
+    if available_ports:
+        midiout.open_port(0)
+    else:
+        midiout.open_virtual_port("My virtual output")
+
+    midiout.send_message([0xC0,80]) #'Square wave'
+    midiout.send_message([0xC1,80]) #'Square wave'
+    midiout.send_message([0xC2,43]) #Triangle wave
+    midiout.send_message([0xC3,127]) #Noise. Used gunshot. Poor but sometimes works.'
+    #return midiout
+
+def playmidi(APU):
+    for ch in range(4):
+        #print(apu.notes[note])
+        if APU.notes_off[ch][0]:
+            APU.notes_off[ch][0] = 0
+            midiout.send_message(APU.notes_off[ch][1:])
+                    
+        if APU.notes_on[ch][0]:
+            APU.notes_on[ch][0] = 0
+            midiout.send_message(APU.notes_on[ch][1:])
+
+def playfile(sf):
+    global apu
+    s = bytearray(np.fromfile(sf,dtype=np.uint8)).decode('utf8').split('\n')
+    for fsound in s:
+        t=time.time()
+        sdata = [int(i) for i in fsound.split(';')[1].split(',')]
+        f = uint32(fsound.split(';')[0])
+        cw = [int(i) for i in fsound.split(';')[2].split(',')]
+
+        #print(f,sdata,cw)
+        apu.Sound[0:0x100] = sdata
+        apu.MMU.ChannelWrite[0:0x10] = cw
+            
+        apu.updateSounds(f)
+
+        playmidi(apu)
+            
+        while time.time()-t<0.016:
+            pass
+
 if __name__ == '__main__':
     print(getTone(300))
     apu = APU()
     
     #apu.pAPUinit()
-
+    initMidi()
     note_on = [0x93, 60, 112] # channel 1, middle C, velocity 112
     note_off = [0x83, 60, 0]
     #apu.midiout.send_message([192,127])
-    apu.midiout.send_message(note_on)
+    midiout.send_message(note_on)
     time.sleep(0.5)
-    #apu.midiout.send_message(note_off)
+    notes = np.zeros((12,3),np.uint8)
+    note_on = np.array([0x93, 60, 112],np.uint8) # channel 1, middle C, velocity 112
+    notes[3] = [0x93, 60, 112]
+    note_off = np.array([0x83, 60, 0],np.uint8)
+    midiout.send_message(notes[3])
+    time.sleep(0.5)
 
-    #apu.midiout.send_message([0xB0, 65, 80])
-    #apu.midiout.send_message([0xB0, 65, 80])
-    #apu.midiout.send_message([0x93, 60, 112])
-    time.sleep(0.5)
-    #apu.midiout.send_message([0x83, 60, 0])
+    playfile('sounddata.txt')
     
-
-    #del midiout
-
-
-
-
-
-
-
-
 
 
         
