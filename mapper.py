@@ -166,9 +166,9 @@ class MAPPER(object):
         return False
 
     
-    def HSync(self, scanline ):
+    def HSync(self, scanline, ppuShow ):
         if self.Mapper == 4:
-            return self.MAPPER4.HSync(scanline)
+            return self.MAPPER4.HSync(scanline, ppuShow)
         return False
 
     #@property

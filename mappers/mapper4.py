@@ -80,21 +80,22 @@ class MAPPER():
         return 4
          
     def reset(self):
-        for i in range(8):
-            self.reg[i] = 0
+        self.reg[:] = 0
 
         self.prg0 = 0
         self.prg1 = 1
-
-        self.SetBank_CPU()
+        self.MMC3_SetBank_CPU()
+        
+        #if( self.MMC.VROM_1K_SIZE ):
         self.chr01 = 0
         self.chr23 = 2
         self.chr4 = 4
         self.chr5 = 5
         self.chr6 = 6
         self.chr7 = 7
-
-        self.SetBank_PPU()
+        self.MMC3_SetBank_PPU()
+        #else:
+            #self.chr01 = self.chr23 = self.chr4 = self.chr5 = self.chr6 = self.chr7 = 0
         
         self.we_sram  = 0;	# Disable
         self.irq_enable = 0;	# Disable
@@ -104,7 +105,7 @@ class MAPPER():
         self.irq_preset = 0;
         self.irq_preset_vbl = 0;
 
-        #IRQ_CLOCK == 1
+        #IRQ_CLOCK == 1  default IRQ type
         self.irq_type = 0
         
         return 1
@@ -115,36 +116,36 @@ class MAPPER():
         #print 'irq_occur: ',self.irq_occur
         if addr == 0x8000:
             self.reg[0] = data
-            self.SetBank_CPU()
-            self.SetBank_PPU()
+            self.MMC3_SetBank_CPU()
+            self.MMC3_SetBank_PPU()
                 
         elif addr ==0x8001:
             self.reg[1] = data
             bank = self.reg[0] & 0x07
             if bank == 0x00:
                     self.chr01 = data & 0xFE
-                    self.SetBank_PPU()
+                    self.MMC3_SetBank_PPU()
             elif bank == 0x01:
                     self.chr23 = data & 0xFE
-                    self.SetBank_PPU()
+                    self.MMC3_SetBank_PPU()
             elif bank == 0x02:
                     self.chr4 = data
-                    self.SetBank_PPU()
+                    self.MMC3_SetBank_PPU()
             elif bank == 0x03:
                     self.chr5 = data
-                    self.SetBank_PPU()
+                    self.MMC3_SetBank_PPU()
             elif bank == 0x04:
                     self.chr6 = data
-                    self.SetBank_PPU()
+                    self.MMC3_SetBank_PPU()
             elif bank == 0x05:
                     self.chr7 = data
-                    self.SetBank_PPU()
+                    self.MMC3_SetBank_PPU()
             elif bank == 0x06:
                     self.prg0 = data
-                    self.SetBank_CPU()
+                    self.MMC3_SetBank_CPU()
             elif bank == 0x07:
                     self.prg1 = data
-                    self.SetBank_CPU()
+                    self.MMC3_SetBank_CPU()
 
         elif addr == 0xA000:
             self.reg[2] = data
@@ -158,19 +159,21 @@ class MAPPER():
                    
         elif addr == 0xC000:
             self.reg[4] = data
-            self.irq_latch = data
-            if self.irq_type == MMC3_IRQ_KLAX:
-                self.irq_counter = data
+            #self.irq_latch = data       #----- remove
+            self.irq_counter = data    #------ add
+            #if self.irq_type == MMC3_IRQ_KLAX:
+                #self.irq_counter = data
 
         elif addr == 0xC001:
             self.reg[5] = data
-            if self.scanline < 240:
-                self.irq_counter |= 0x80
-                self.irq_preset = 0xFF
-            else:
-                self.irq_counter |= 0x80
-                self.irq_preset_vbl = 0xFF
-                self.irq_preset = 0
+            self.irq_latch = data
+            #if self.scanline < 240:
+            #    self.irq_counter |= 0x80
+            #    self.irq_preset = 0xFF
+            #else:
+            #    self.irq_counter |= 0x80
+            #    self.irq_preset_vbl = 0xFF
+            #    self.irq_preset = 0
             
 
         elif addr == 0xE000:
@@ -185,25 +188,29 @@ class MAPPER():
 
 
                     
-    def HSync(self,scanline):
+    def HSync(self,scanline, ppuShow):
         self.scanline = scanline
-        if( (scanline >= 0 and scanline <= 239) ):
-            if( self.irq_preset_vbl ):
-                self.irq_counter = self.irq_latch
-                self.irq_preset_vbl = 0
+        if( self.irq_enable and (scanline >= 0 and scanline <= 239) and ppuShow):
+            #if( self.irq_preset_vbl ):
+            #    self.irq_counter = self.irq_latch
+            #    self.irq_preset_vbl = 0
             
-            if( self.irq_preset ):
-                self.irq_counter = self.irq_latch;
-                self.irq_preset = 0
+            #if( self.irq_preset ):
+            #    self.irq_counter = self.irq_latch;
+            #    self.irq_preset = 0
                 
-            elif (self.irq_counter > 0):
-                self.irq_counter -= 1
+            #elif (self.irq_counter > 0):
+            #    self.irq_counter -= 1
 
-            if ( self.irq_counter == 0 ):
-                if( self.irq_enable ):
-                    self.irq_request = 0xFF
-                self.irq_preset = 0xFF
+            #if ( self.irq_counter == 0 ):
+            #    if( self.irq_enable ):
+            #        self.irq_request = 0xFF
+            #    self.irq_preset = 0xFF
 
+            self.irq_counter -= 1
+            if  ( self.irq_counter == 0 ):
+                self.irq_counter = self.irq_latch
+                return True
         #if( self.irq_request && (nes->GetIrqType() == NES::IRQ_HSYNC) ):
             #return True
 
@@ -214,18 +221,18 @@ class MAPPER():
         
     
     def Clock(self,cycles): #default IRQ_CLOCK
-        if( self.irq_request ):
-            return True
+        #if( self.irq_request ):
+            #return True
         return False
 
-    def SetBank_CPU(self):
+    def MMC3_SetBank_CPU(self):
         if( self.reg[0] & 0x40 ):
             self.MMC.SetPROM_32K_Bank( self.MMC.PROM_8K_SIZE-2, self.prg1, self.prg0, self.MMC.PROM_8K_SIZE-1 );
         else:
             self.MMC.SetPROM_32K_Bank( self.prg0, self.prg1, self.MMC.PROM_8K_SIZE-2, self.MMC.PROM_8K_SIZE-1 );
     
 
-    def SetBank_PPU(self):
+    def MMC3_SetBank_PPU(self):
         if( self.MMC.VROM_1K_SIZE ):
             if( self.reg[0] & 0x80 ):
                 self.MMC.SetVROM_8K_Bank8( self.chr4, self.chr5, self.chr6, self.chr7,
@@ -233,7 +240,29 @@ class MAPPER():
             else:
                 self.MMC.SetVROM_8K_Bank8( self.chr01, self.chr01+1, self.chr23, self.chr23+1,
                                            self.chr4, self.chr5, self.chr6, self.chr7 );
-            
+            return 1
+
+        else:
+            if ( self.reg[0] & 0x80 ):
+                self.MMC.SetCRAM_1K_Bank( 4, (self.chr01+0)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 5, (self.chr01+1)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 6, (self.chr23+0)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 7, (self.chr23+1)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 0, (self.chr4)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 1, (self.chr5)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 2, (self.chr6)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 3, (self.chr7)&0x07 )
+            else:
+                self.MMC.SetCRAM_1K_Bank( 0, (self.chr01+0)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 1, (self.chr01+1)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 2, (self.chr23+0)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 3, (self.chr23+1)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 4, (self.chr4)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 5, (self.chr5)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 6, (self.chr6)&0x07 )
+                self.MMC.SetCRAM_1K_Bank( 7, (self.chr7)&0x07 )
+               
+                
 
 #MAPPER_type = nb.deferred_type()
 #MAPPER_type.define(MAPPER.class_type.instance_type)

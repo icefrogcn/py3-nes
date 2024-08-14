@@ -26,7 +26,7 @@ from mmu import MMU
 
 #from apu import APU#,APU_type
 from ppu import PPU, load_PPU, jit_PPU_class
-from ppu_reg import PPUREG, PPUBIT
+#from ppu_reg import PPUREG, PPUBIT
 from mapper import MAPPER
 from joypad import JOYPAD
 
@@ -172,10 +172,10 @@ class CPU6502(object):
         return self.MMU.RAM
     @property
     def bank0(self):
-        return self.RAM[0]
+        return self.MMU.RAM[0]
     @property
     def STACK(self):
-        return self.bank0[0x100:0x200]
+        return self.MMU.RAM[0][0x100:0x200]
     @property
     def Sound(self):
         return self.MMU.RAM[2][0:0x100]
@@ -328,132 +328,132 @@ class CPU6502(object):
     ' INC (N-----Z-) '
     def INC(self):			
         self.DT += 1;self.DT &= 0xFF
-        self.SET_ZN_FLAG(self.DT);	
+        self.SET_ZN_FLAG(self.DT)	
     
     ' INX (N-----Z-) '
     def	INX(self) :		
         self.X += 1;self.X &= 0xFF		
-        self.SET_ZN_FLAG(self.X);	
+        self.SET_ZN_FLAG(self.X)	
     
     ' INY (N-----Z-) '
     def	INY(self):
         self.Y += 1;self.Y &= 0xFF
-        self.SET_ZN_FLAG(self.Y);	
+        self.SET_ZN_FLAG(self.Y)	
     
     ' DEC (N-----Z-) '
     def DEC(self):			
         self.DT -= 1;self.DT &= 0xFF
-        self.SET_ZN_FLAG(self.DT);	
+        self.SET_ZN_FLAG(self.DT)	
     
     ' DEX (N-----Z-) '
     def	DEX(self) :		
         self.X -= 1;self.X &= 0xFF		
-        self.SET_ZN_FLAG(self.X);	
+        self.SET_ZN_FLAG(self.X)	
     
     ' DEY (N-----Z-) '
     def	DEY(self):
         self.Y -= 1;self.Y &= 0xFF
-        self.SET_ZN_FLAG(self.Y);
+        self.SET_ZN_FLAG(self.Y)
 
     'AND(N - ----Z -) '
     def AND(self) :
         self.A &= self.DT;
-        self.SET_ZN_FLAG(self.A);
+        self.SET_ZN_FLAG(self.A)
 
     '*ORA(N - ----Z -)'
     def ORA(self):
         self.A |= self.DT;
-        self.SET_ZN_FLAG(self.A);
+        self.SET_ZN_FLAG(self.A)
 
     'EOR(N - ----Z -)'
     def EOR(self):
         self.A ^= self.DT;
-        self.SET_ZN_FLAG(self.A);
+        self.SET_ZN_FLAG(self.A)
 
     '/ *ASL_A(N - ----ZC) * /'
     def ASL_A(self):
-        self.TST_FLAG(self.A & 0x80, C_FLAG); \
-        self.A <<= 1; \
-        self.SET_ZN_FLAG(self.A); \
+        self.TST_FLAG(self.A & 0x80, C_FLAG)
+        self.A <<= 1
+        self.SET_ZN_FLAG(self.A)
 
 
     '/ *ASL(N - ----ZC) * /'
     def ASL(self):
-        self.TST_FLAG(self.DT & 0x80, C_FLAG); \
-        self.DT <<= 1; \
-        self.SET_ZN_FLAG(self.DT); \
+        self.TST_FLAG(self.DT & 0x80, C_FLAG)
+        self.DT <<= 1
+        self.SET_ZN_FLAG(self.DT)
 
     '/ *LSR_A(N - ----ZC) * /'
-    def LSR_A(self):			\
-        self.TST_FLAG(self.A & 0x01, C_FLAG); \
-        self.A >>= 1; \
-        self.SET_ZN_FLAG(self.A); \
+    def LSR_A(self):			
+        self.TST_FLAG(self.A & 0x01, C_FLAG)
+        self.A >>= 1
+        self.SET_ZN_FLAG(self.A)
 
     '/ *LSR(N - ----ZC) * /'
-    def	LSR(self):			\
-        self.TST_FLAG(self.DT & 0x01, C_FLAG); \
-        self.DT >>= 1; \
-        self.SET_ZN_FLAG(self.DT);
+    def	LSR(self):			
+        self.TST_FLAG(self.DT & 0x01, C_FLAG)
+        self.DT >>= 1
+        self.SET_ZN_FLAG(self.DT)
     '/* ROL_A (N-----ZC) */'
     def	ROL_A(self):				
         if( self.P & C_FLAG ):		
-            self.TST_FLAG(self.A&0x80,C_FLAG);	
-            self.A = (self.A<<1)|0x01;		
-        else:			\
-            self.TST_FLAG(self.A&0x80,C_FLAG);	\
-            self.A <<= 1;			\
+            self.TST_FLAG(self.A&0x80,C_FLAG)
+            self.A = (self.A<<1)|0x01		
+        else:			
+            self.TST_FLAG(self.A&0x80,C_FLAG)	
+            self.A <<= 1			
 
         self.SET_ZN_FLAG(self.A);
         
     '/* ROL (N-----ZC) */'
     def	ROL(self):				
-        if( self.P & C_FLAG ):			\
-            self.TST_FLAG(self.DT&0x80,C_FLAG);	\
-            self.DT = (self.DT<<1)|0x01;		
+        if( self.P & C_FLAG ):			
+            self.TST_FLAG(self.DT&0x80,C_FLAG)
+            self.DT = (self.DT<<1)|0x01		
         else:
-            self.TST_FLAG(self.DT&0x80,C_FLAG);	\
-            self.DT <<= 1;
+            self.TST_FLAG(self.DT&0x80,C_FLAG)
+            self.DT <<= 1
             
-        self.SET_ZN_FLAG(self.DT);			\
+        self.SET_ZN_FLAG(self.DT)			
 
 
     '/* ROR_A (N-----ZC) */'
     def	ROR_A(self):				
         if( self.P & C_FLAG ):			
-            self.TST_FLAG(self.A&0x01,C_FLAG);	
+            self.TST_FLAG(self.A&0x01,C_FLAG)	
             self.A = (self.A>>1)|0x80;		
         else:				
-            self.TST_FLAG(self.A&0x01,C_FLAG);	\
+            self.TST_FLAG(self.A&0x01,C_FLAG)	
             self.A >>= 1;
         
-        self.SET_ZN_FLAG(self.A);			\
+        self.SET_ZN_FLAG(self.A)			
     
     '/* ROR (N-----ZC) */'
     def	ROR(self):					
         if( self.P & C_FLAG ):		
-            self.TST_FLAG(self.DT&0x01,C_FLAG);	
+            self.TST_FLAG(self.DT&0x01,C_FLAG)	
             self.DT = (self.DT>>1)|0x80;		
         else :
-            self.TST_FLAG(self.DT&0x01,C_FLAG);	
-            self.DT >>= 1;			
+            self.TST_FLAG(self.DT&0x01,C_FLAG)	
+            self.DT >>= 1			
         
-        self.SET_ZN_FLAG(self.DT);			
+        self.SET_ZN_FLAG(self.DT)			
 
     '/* BIT (NV----Z-) */'
-    def	BIT(self):					\
-        self.TST_FLAG( (self.DT&self.A)==0, Z_FLAG );	\
-        self.TST_FLAG( self.DT&0x80, N_FLAG );		\
-        self.TST_FLAG( self.DT&0x40, V_FLAG );
+    def	BIT(self):					
+        self.TST_FLAG( (self.DT&self.A)==0, Z_FLAG )	
+        self.TST_FLAG( self.DT&0x80, N_FLAG )		
+        self.TST_FLAG( self.DT&0x40, V_FLAG )
 
     '/* LDA (N-----Z-) */'
     def LDA(self):
-        self.A = self.DT; self.SET_ZN_FLAG(self.A); 
+        self.A = self.DT; self.SET_ZN_FLAG(self.A) 
     '/* LDX (N-----Z-) */'
     def LDX(self):
-        self.X = self.DT; self.SET_ZN_FLAG(self.X); 
+        self.X = self.DT; self.SET_ZN_FLAG(self.X) 
     '/* LDY (N-----Z-) */'
     def LDY(self):
-        self.Y = self.DT; self.SET_ZN_FLAG(self.Y); 
+        self.Y = self.DT; self.SET_ZN_FLAG(self.Y) 
 
     '/* STA (--------) */'
     def	STA(self):
@@ -467,67 +467,67 @@ class CPU6502(object):
 
     '/* TAX (N-----Z-) */'
     def	TAX(self):
-        self.X = self.A; self.SET_ZN_FLAG(self.X); 
+        self.X = self.A; self.SET_ZN_FLAG(self.X) 
     '/* TXA (N-----Z-) */'
     def	TXA(self):
-        self.A = self.X; self.SET_ZN_FLAG(self.A); 
+        self.A = self.X; self.SET_ZN_FLAG(self.A) 
     '/* TAY (N-----Z-) */'
     def	TAY(self):
-        self.Y = self.A; self.SET_ZN_FLAG(self.Y); 
+        self.Y = self.A; self.SET_ZN_FLAG(self.Y) 
     '/* TYA (N-----Z-) */'
     def	TYA(self):
-        self.A = self.Y; self.SET_ZN_FLAG(self.A); 
+        self.A = self.Y; self.SET_ZN_FLAG(self.A) 
     '/* TSX (N-----Z-) */'
     def	TSX(self):
-        self.X = self.S; self.SET_ZN_FLAG(self.X); 
+        self.X = self.S; self.SET_ZN_FLAG(self.X) 
     '/* TXS (--------) */'
     def	TXS(self):
-        self.S = self.X; 
+        self.S = self.X
 
 
     '/* CMP (N-----ZC) */'
     def	CMP(self): 				
-        self.WT = self.A - self.DT;				
+        self.WT = self.A - self.DT			
         self.TST_FLAG( (self.WT&0x8000)==0, C_FLAG )	
         self.SET_ZN_FLAG( self.WT )		
     
     '/* CPX (N-----ZC) */'
-    def	CPX(self):			\
-        self.WT = self.X - self.DT;				\
-        self.TST_FLAG( (self.WT&0x8000)==0, C_FLAG );	\
-        self.SET_ZN_FLAG( self.WT );		\
+    def	CPX(self):			
+        self.WT = self.X - self.DT		
+        self.TST_FLAG( (self.WT&0x8000)==0, C_FLAG )	
+        self.SET_ZN_FLAG( self.WT )		
     
     '/* CPY (N-----ZC) */'
-    def	CPY(self) :				\
-        self.WT = self.Y - self.DT;				\
-        self.TST_FLAG( (self.WT&0x8000)==0, C_FLAG );	\
-        self.SET_ZN_FLAG( self.WT );
+    def	CPY(self) :				
+        self.WT = self.Y - self.DT		
+        self.TST_FLAG( (self.WT&0x8000)==0, C_FLAG )	
+        self.SET_ZN_FLAG( self.WT )
 
-    def JMP_ID(self):			\
-        self.WT = self.OP6502W(self.PC);			\
-        self.EA = self.RD6502(self.WT);			\
-        self.WT = (self.WT&0xFF00)|((self.WT+1)&0x00FF);	\
-        self.PC = self.EA+self.RD6502(self.WT)*0x100;		\
+    def JMP_ID(self):			
+        self.WT = self.OP6502W(self.PC)			
+        self.EA = self.RD6502(self.WT)		
+        self.WT = (self.WT&0xFF00)|((self.WT+1)&0x00FF)	
+        self.PC = self.EA+self.RD6502(self.WT)*0x100		
 
-    def JMP(self):			\
-        self.PC = self.OP6502W( self.PC );
+    def JMP(self):			
+        self.PC = self.OP6502W( self.PC )
 
-    def JSR(self):			\
-        self.EA = self.OP6502W( self.PC );	\
-        self.PC += 1 ;			\
-        self.PUSH( self.PC>>8 );	\
-        self.PUSH( self.PC&0xFF );	\
+    def JSR(self):			
+        self.EA = self.OP6502W( self.PC )	
+        self.PC += 1 			
+        self.PUSH( self.PC>>8 )	
+        self.PUSH( self.PC&0xFF )	
         self.PC = self.EA;
 
-    def RTS(self):			\
-        self.PC  = self.POP();		\
-        self.PC |= self.POP()*0x0100;	\
-        self.PC += 1 ;			\
+    def RTS(self):			
+        self.PC  = self.POP()		
+        self.PC |= self.POP()*0x0100	
+        self.PC += 1 			
     
-    def	RTI(self):		\
-        self.P   = self.POP() | R_FLAG;	\
-        self.PC  = self.POP();		\
-        self.PC |= self.POP()*0x0100;	\
+    def	RTI(self):		
+        self.P   = self.POP() | R_FLAG
+        self.PC  = self.POP()
+        self.PC |= self.POP()*0x0100
 
     @property
     def nmibasecount(self):
@@ -537,201 +537,201 @@ class CPU6502(object):
         self.DMA_cycles += cycles
     
     def NMI(self):
-        self.INT_pending |= NMI_FLAG;
-        self.nmicount = self.nmibasecount;
+        self.INT_pending |= NMI_FLAG
+        self.nmicount = self.nmibasecount
 
     def IRQ(self):
-        self.INT_pending |= IRQ_FLAG;
+        self.INT_pending |= IRQ_FLAG
 
     def IRQ_NotPending(self):
         if( not (self.P & I_FLAG) ):
-            self.INT_pending |= IRQ_FLAG;
+            self.INT_pending |= IRQ_FLAG
 
         
-    def	_NMI(self):		\
-        self.PUSH( self.PC>>8 );		\
-        self.PUSH( self.PC&0xFF );		\
-        self.CLR_FLAG( B_FLAG );		\
-        self.PUSH( self.P );			\
-        self.SET_FLAG( I_FLAG );		\
-        self.PC = self.RD6502W(NMI_VECTOR);	\
-        self.INT_pending &= ~NMI_FLAG;	\
-        self.exec_cycles += 6;		\
+    def	_NMI(self):		
+        self.PUSH( self.PC>>8 )		
+        self.PUSH( self.PC&0xFF )		
+        self.CLR_FLAG( B_FLAG )		
+        self.PUSH( self.P )			
+        self.SET_FLAG( I_FLAG )		
+        self.PC = self.RD6502W(NMI_VECTOR)	
+        self.INT_pending &= ~NMI_FLAG	
+        self.exec_cycles += 6		
     
     def	_IRQ(self):			
         if( not(self.P & I_FLAG) ):
-            self.PUSH( self.PC>>8 );		\
-            self.PUSH( self.PC&0xFF );		\
-            self.CLR_FLAG( B_FLAG );		\
-            self.PUSH( self.P );			\
-            self.SET_FLAG( I_FLAG );		\
-            self.PC = self.RD6502W(IRQ_VECTOR);	\
-            self.exec_cycles += 6;		\
-            self.INT_pending &= ~IRQ_FLAG;	
+            self.PUSH( self.PC>>8 )		
+            self.PUSH( self.PC&0xFF )		
+            self.CLR_FLAG( B_FLAG )		
+            self.PUSH( self.P )		
+            self.SET_FLAG( I_FLAG )	
+            self.PC = self.RD6502W(IRQ_VECTOR)
+            self.exec_cycles += 6
+            self.INT_pending &= ~IRQ_FLAG	
 
     def BRK(self):				
-        self.PC += 1 ;				\
-        self.PUSH( self.PC>>8 );		\
-        self.PUSH( self.PC&0xFF );		\
-        self.SET_FLAG( B_FLAG );		\
-        self.PUSH( self.P );			\
-        self.SET_FLAG( I_FLAG );		\
-        self.PC = self.RD6502W(IRQ_VECTOR);
+        self.PC += 1
+        self.PUSH( self.PC>>8 )
+        self.PUSH( self.PC&0xFF )
+        self.SET_FLAG( B_FLAG )
+        self.PUSH( self.P )
+        self.SET_FLAG( I_FLAG )
+        self.PC = self.RD6502W(IRQ_VECTOR)
 
-    def REL_JUMP(self):		\
-        self.ET = self.PC;		\
-        self.EA = self.PC + np.int8(self.DT);	\
-        self.PC = self.EA;		\
-        self.ADD_CYCLE(1);		\
-        self.CHECK_EA();
+    def REL_JUMP(self):		
+        self.ET = self.PC
+        self.EA = self.PC + np.int8(self.DT)
+        self.PC = self.EA
+        self.ADD_CYCLE(1)
+        self.CHECK_EA()
 
     def	BCC(self):
-        if( not (self.P & C_FLAG) ): self.REL_JUMP(); 
+        if( not (self.P & C_FLAG) ): self.REL_JUMP()
     def	BCS(self):
-        if(  (self.P & C_FLAG) ): self.REL_JUMP(); 
+        if(  (self.P & C_FLAG) ): self.REL_JUMP()
     def	BNE(self):
-        if( not (self.P & Z_FLAG) ): self.REL_JUMP(); 
+        if( not (self.P & Z_FLAG) ): self.REL_JUMP() 
     def	BEQ(self):
-        if(  (self.P & Z_FLAG) ): self.REL_JUMP(); 
+        if(  (self.P & Z_FLAG) ): self.REL_JUMP()
     def	BPL(self):
-        if( not (self.P & N_FLAG) ): self.REL_JUMP(); 
+        if( not (self.P & N_FLAG) ): self.REL_JUMP()
     def	BMI(self):
-        if(  (self.P & N_FLAG) ): self.REL_JUMP(); 
+        if(  (self.P & N_FLAG) ): self.REL_JUMP()
     def	BVC(self):
-        if( not (self.P & V_FLAG) ): self.REL_JUMP(); 
+        if( not (self.P & V_FLAG) ): self.REL_JUMP() 
     def	BVS(self):
-        if(  (self.P & V_FLAG) ): self.REL_JUMP(); 
+        if(  (self.P & V_FLAG) ): self.REL_JUMP() 
 
 
     def	CLC(self):
-        self.P &= ~C_FLAG; 
+        self.P &= ~C_FLAG 
     def	CLD(self):
-        self.P &= ~D_FLAG; 
+        self.P &= ~D_FLAG 
     def	CLI(self):
-        self.P &= ~I_FLAG; 
+        self.P &= ~I_FLAG 
     def	CLV(self):
-        self.P &= ~V_FLAG; 
+        self.P &= ~V_FLAG 
     def	SEC(self):
-        self.P |= C_FLAG; 
+        self.P |= C_FLAG 
     def	SED(self):
-        self.P |= D_FLAG; 
+        self.P |= D_FLAG 
     def	SEI(self):
-        self.P |= I_FLAG; 
+        self.P |= I_FLAG
 
     '// Unofficial'
     def	ANC(self):				
-        self.A &= self.DT;			\
-        self.SET_ZN_FLAG( self.A );		\
-        self.TST_FLAG( self.P&N_FLAG, C_FLAG );
+        self.A &= self.DT			
+        self.SET_ZN_FLAG( self.A )		
+        self.TST_FLAG( self.P&N_FLAG, C_FLAG )
 
     def	ANE(self):			
-        self.A = (self.A|0xEE)&self.X&self.DT;	\
-        self.SET_ZN_FLAG( self.A );
+        self.A = (self.A|0xEE)&self.X&self.DT
+        self.SET_ZN_FLAG( self.A )
 
-    def	ARR(self):				\
-        self.DT &= self.A;				\
-        self.A = (self.DT>>1)|((self.P&C_FLAG)<<7);	\
-        self.SET_ZN_FLAG( self.A );			\
-        self.TST_FLAG( self.A&0x40, C_FLAG );		\
-        self.TST_FLAG( (self.A>>6)^(self.A>>5), V_FLAG );	
+    def	ARR(self):				
+        self.DT &= self.A			
+        self.A = (self.DT>>1)|((self.P&C_FLAG)<<7)	
+        self.SET_ZN_FLAG( self.A )			
+        self.TST_FLAG( self.A&0x40, C_FLAG )		
+        self.TST_FLAG( (self.A>>6)^(self.A>>5), V_FLAG )	
     
 
-    def	ASR(self):			\
-        self.DT &= self.A;			\
-        self.TST_FLAG( self.DT&0x01, C_FLAG );	\
-        self.A = self.DT>>1;			\
-        self.SET_ZN_FLAG( self.A );		
+    def	ASR(self):			
+        self.DT &= self.A			
+        self.TST_FLAG( self.DT&0x01, C_FLAG )	
+        self.A = self.DT>>1			
+        self.SET_ZN_FLAG( self.A )		
 
     def	DCP(self):			
-        self.DT -= 1;				\
-        self.CMP();				\
+        self.DT -= 1				
+        self.CMP()				
     
     def	DOP(self):				
-        self.PC += 1;				\
+        self.PC += 1				
     
     def	ISB(self):				
-        self.DT += 1;				\
-        self.SBC();				
+        self.DT += 1				
+        self.SBC()				
 
     def	LAS(self):				
-        self.A = self.X = self.S = (self.S & self.DT);	\
-        self.SET_ZN_FLAG( self.A );		
+        self.A = self.X = self.S = (self.S & self.DT)	
+        self.SET_ZN_FLAG( self.A )		
     
     def	LAX(self):				
-        self.A = self.DT;			\
-        self.X = self.A;			\
-        self.SET_ZN_FLAG( self.A );		
+        self.A = self.DT			
+        self.X = self.A			
+        self.SET_ZN_FLAG( self.A )		
     
     def	LXA(self):				
-        self.A = self.X = ((self.A|0xEE)&self.DT);	\
-        self.SET_ZN_FLAG( self.A );		
+        self.A = self.X = ((self.A|0xEE)&self.DT)	
+        self.SET_ZN_FLAG( self.A )		
 
 
     def	RLA(self):					
         if( self.P & C_FLAG ) :			
-            self.TST_FLAG( self.DT&0x80, C_FLAG );	
-            self.DT = (self.DT<<1)|1;			
+            self.TST_FLAG( self.DT&0x80, C_FLAG )	
+            self.DT = (self.DT<<1)|1			
         else:
-            self.TST_FLAG( self.DT&0x80, C_FLAG );	
-            self.DT <<= 1;			
+            self.TST_FLAG( self.DT&0x80, C_FLAG )	
+            self.DT <<= 1			
 
-        self.A &= self.DT;				
-        self.SET_ZN_FLAG( self.A );			
+        self.A &= self.DT				
+        self.SET_ZN_FLAG( self.A )			
     
 
     def	RRA(self):				
         if(self.P & C_FLAG ):			
-            self.TST_FLAG( self.DT&0x01, C_FLAG );	
-            self.DT = (self.DT>>1)|0x80;		
+            self.TST_FLAG( self.DT&0x01, C_FLAG )	
+            self.DT = (self.DT>>1)|0x80		
         else:				
-            self.TST_FLAG( self.DT&0x01, C_FLAG );	
-            self.DT >>= 1;			
+            self.TST_FLAG( self.DT&0x01, C_FLAG )	
+            self.DT >>= 1			
         
-        self.ADC();
+        self.ADC()
 
 
 
     def	SAX(self):			
-        self.DT = self.A & self.X;			\
+        self.DT = self.A & self.X			
 
     def	SBX(self):
-        self.WT = (self.A&self.X)-self.DT;		\
-        self.TST_FLAG( self.WT < 0x100, C_FLAG );	\
-        self.X = self.WT&0xFF;			\
-        self.SET_ZN_FLAG( self.X );		\
+        self.WT = (self.A&self.X)-self.DT		
+        self.TST_FLAG( self.WT < 0x100, C_FLAG )	
+        self.X = self.WT&0xFF			
+        self.SET_ZN_FLAG( self.X )		
 
     def	SHA(self):
-        self.DT = self.A & self.X & (((self.EA>>8)+1)&0xFF);	\
+        self.DT = self.A & self.X & (((self.EA>>8)+1)&0xFF)	
 
     def	SHS(self):
-        self.S = self.A & self.X;		\
-        self.DT = self.S & (((self.EA>>8)+1)&0xFF);	\
+        self.S = self.A & self.X		
+        self.DT = self.S & (((self.EA>>8)+1)&0xFF)	
     
 
     def	SHX(self):
-        self.DT = self.X & (((self.EA>>8)+1)&0xFF);	\
+        self.DT = self.X & (((self.EA>>8)+1)&0xFF)	
     
 
     def	SHY(self):
-        self.DT = self.Y & (((self.EA>>8)+1)&0xFF);	\
+        self.DT = self.Y & (((self.EA>>8)+1)&0xFF)	
     
 
     def	SLO(self):
-        self.TST_FLAG( self.DT&0x80, C_FLAG );	\
-        self.DT <<= 1;			\
-        self.A |= self.DT;			\
-        self.SET_ZN_FLAG( self.A );		\
+        self.TST_FLAG( self.DT&0x80, C_FLAG )	
+        self.DT <<= 1			
+        self.A |= self.DT			
+        self.SET_ZN_FLAG( self.A )		
     
 
     def	SRE(self):
-        self.TST_FLAG( self.DT&0x01, C_FLAG );	\
-        self.DT >>= 1;			\
-        self.A ^= self.DT;			\
-        self.SET_ZN_FLAG( self.A );		\
+        self.TST_FLAG( self.DT&0x01, C_FLAG )
+        self.DT >>= 1			
+        self.A ^= self.DT			
+        self.SET_ZN_FLAG( self.A )		
     
 
     def	TOP(self):
-        self.PC += 2;			\
+        self.PC += 2
     
 
 
@@ -820,13 +820,15 @@ class CPU6502(object):
                         self.EmulationCPU(ScanlineCycles)
                         self.PPU.FrameStart()
                         self.PPU.ScanlineNext()
-                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
+                        if self.MAPPER.HSync(scanline, self.PPU.isDispON):
+                            self.IRQ_NotPending()
                         self.PPU.ScanlineStart()
                     else:
                         self.EmulationCPU(HDrawCycles)
                         self.PPU.FrameStart()
                         self.PPU.ScanlineNext()
-                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
+                        if self.MAPPER.HSync(scanline, self.PPU.isDispON):
+                            self.IRQ_NotPending()
                         self.EmulationCPU(FETCH_CYCLES*32)
                         self.PPU.ScanlineStart()
                         self.EmulationCPU( FETCH_CYCLES*10 + 4 )
@@ -841,7 +843,8 @@ class CPU6502(object):
                         if( self.RenderMethod == PRE_ALL_RENDER ):
                             self.EmulationCPU(ScanlineCycles )
                             
-                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
+                        if self.MAPPER.HSync(scanline, self.PPU.isDispON):
+                            self.IRQ_NotPending()
                         self.PPU.ScanlineStart()
                     else:
                         if( self.RenderMethod == POST_RENDER ):
@@ -854,7 +857,8 @@ class CPU6502(object):
 
                         self.PPU.ScanlineNext()
 
-                        if self.MAPPER.HSync(scanline):self.IRQ_NotPending()
+                        if self.MAPPER.HSync(scanline, self.PPU.isDispON):
+                            self.IRQ_NotPending()
                         self.EmulationCPU(FETCH_CYCLES*32)
                         self.PPU.ScanlineStart()
                         self.EmulationCPU(FETCH_CYCLES*10 + 4 )
@@ -869,10 +873,12 @@ class CPU6502(object):
                     
                     if( self.RenderMethod == POST_RENDER ):
                         self.EmulationCPU(ScanlineCycles)
-                        if self.MAPPER.HSync( scanline ):self.IRQ_NotPending()
+                        if self.MAPPER.HSync( scanline , self.PPU.isDispON):
+                            self.IRQ_NotPending()
                     else:
                         self.EmulationCPU(HDrawCycles)
-                        if self.MAPPER.HSync( scanline ):self.IRQ_NotPending()
+                        if self.MAPPER.HSync( scanline , self.PPU.isDispON):
+                            self.IRQ_NotPending()
                         self.EmulationCPU(HBlankCycles)
                         
                     self.Frames += 1
@@ -895,7 +901,8 @@ class CPU6502(object):
                         else:
                             self.EmulationCPU(ScanlineCycles)
 
-                        if self.MAPPER.HSync( scanline ):self.IRQ_NotPending()
+                        if self.MAPPER.HSync( scanline , self.PPU.isDispON):
+                            self.IRQ_NotPending()
                     else:
                         if scanline == 241:
                             self.PPU.VBlankStart()
@@ -905,7 +912,8 @@ class CPU6502(object):
                             self.EmulationCPU(HDrawCycles-(4*12))
                         else:
                             self.EmulationCPU(HDrawCycles)
-                        if self.MAPPER.HSync( scanline ):self.IRQ_NotPending()
+                        if self.MAPPER.HSync( scanline , self.PPU.isDispON):
+                            self.IRQ_NotPending()
                         self.EmulationCPU(HBlankCycles)
 
                     if scanline == 261:#self.PPU.CurrentLine == 261:
@@ -1073,7 +1081,7 @@ class CPU6502(object):
             return self.JOYPAD.Read(address) | 0x40
         
         elif address == 0x4017: #"Read PAD"
-            return self.JOYPAD.Read(address) | self.RAM[2][address & 0x1FFF]
+            return self.JOYPAD.Read(address) | 0x40#self.RAM[2][address & 0x1FFF]
 
         else:
             return self.MAPPER.ExRead(address)
@@ -2174,7 +2182,7 @@ cpu_spec = []
 if __name__ == '__main__':
     #cpu_ram = Memory()
     
-    cpu = jit_CPU_class({ 'PPU': jitType(PPU)})
+    cpu = jit_CPU_class({})
 
     #cpu6502(MMU(),PPU(PPUREG(MMU())))
     
