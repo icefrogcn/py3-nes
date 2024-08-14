@@ -23,6 +23,7 @@ spec = [('Joypad',uint8[:]),
 
 @jitclass(spec)
 class JOYPAD(object):
+    ren15fps:uint8[:]
     
     def __init__(self):
         #self.consloe = consloe
@@ -32,6 +33,8 @@ class JOYPAD(object):
         self.pad1bit = 0
         self.pad2bit = 0
         self.padcnt = np.zeros((0x4,2), np.uint8)
+
+        self.ren15fps = np.array([1,1,0,0], np.uint8)
         
         self.bStrobe = 0
         self.Joypad_Count = 0
@@ -41,42 +44,38 @@ class JOYPAD(object):
         return np.uint8(0x1)
     @property
     def btn_B(self):
-        return np.uint8(0x1)<< 1
+        return np.uint8(0x2)#<< 1
     @property
     def btn_SELECT(self):
-        return np.uint8(0x1)<< 2
+        return np.uint8(0x4)#<< 2
     @property
     def btn_START(self):
-        return np.uint8(0x1)<< 3
+        return np.uint8(0x8)#<< 3
     @property
     def btn_UP(self):
-        return np.uint8(0x1)<< 4
+        return np.uint8(0x10)#<< 4
     @property
     def btn_DOWN(self):
-        return np.uint8(0x1)<< 5
+        return np.uint8(0x20)#<< 5
     @property
     def btn_LEFT(self):
-        return np.uint8(0x1)<< 6
+        return np.uint8(0x40)#<< 6
     @property
     def btn_RIGHT(self):
-        return np.uint8(0x1)<< 7
+        return np.uint8(0x80)#<< 7
     @property
     def btn_AAA(self):
-        return np.uint8(0x1)<< 8
+        return np.uint16(0x100)#<< 8
     @property
     def btn_BBB(self):
-        return np.uint8(0x1)<< 9
+        return np.uint16(0x200)#<< 9
     @property
     def btn_RELEASE(self):
         return 0x40
 
-        
-    @property
-    def ren15fps(self):
-        return np.array([1,1,0,0], np.uint8)
     
     def AAA_press(self,pressed):
-        #self.Joypad[0] = self.Joypad[0] ^ 1 if pressed else self.btn_RELEASE
+
         if pressed:
             if self.padcnt[0,0] < 4:
                 if self.ren15fps[self.padcnt[0,0]]:
@@ -126,7 +125,7 @@ class JOYPAD(object):
         self.padbit[0] = self.chk_Rapid(self.pad1bit)
         
     def chk_Rapid(self, padbit):
-        if padbit & (1<<8):
+        if padbit & self.btn_AAA:
             if self.padcnt[0,0] < 4:
                 if self.ren15fps[self.padcnt[0,0]]:
                     padbit |= self.btn_A
@@ -136,7 +135,7 @@ class JOYPAD(object):
         else:
             self.padcnt[0,0] = 0
 
-        if padbit & (1<<9):
+        if padbit & self.btn_BBB:
             if self.padcnt[0,1] < 4:
                 if self.ren15fps[self.padcnt[0,1]]:
                     padbit |= self.btn_B
@@ -160,8 +159,7 @@ class JOYPAD(object):
         #print self.Joypad_Count
         data = 0x00
         if addr == 0x4016:
-            #with objmode:
-            #    print 'Read pad1bit',self.pad1bit
+            
             data = self.pad1bit & 0x1
             self.pad1bit >>= 1
             
@@ -172,25 +170,34 @@ class JOYPAD(object):
 
 
         return data
-        #if self.Joypad_rapid[self.Joypad_Count]:# A & B rapid
-        #    self.Joypad[self.Joypad_Count] ^= 1
-            
-        #self.Joypad_Count = (self.Joypad_Count + 1) & 7
-        #return joypad_info
+
 
 JOYPAD_type = nb.deferred_type()
 JOYPAD_type.define(JOYPAD.class_type.instance_type)
 
-@njit
-def test():
-    arr = np.zeros(20)
-    #print arr
-    arr += 1
-    #print arr
+
+
+import keyboard
+#Player1   B   A  SE  ST  UP  DN  LF  RT  BBB AAA
+P1_PAD = ['k','j','v','b','w','s','a','d','i','u']
+
+def JOYPAD_PRESS(PAD_SET):
+    padbit = 0
+    for i,key in enumerate(P1_PAD):
+        if keyboard.is_pressed(key):padbit |= 1 << i
+    return padbit
+
+    
+def JOYPAD_CHK(JOYPAD):
+    JOYPAD.pad1bit = JOYPAD_PRESS(P1_PAD)
+    JOYPAD.SyncSub()
+    #print  'set pad1bit' , bin(CPU.JOYPAD.pad1bit)
+
+
     
 if __name__ == '__main__':
     JOYPAD = JOYPAD()
-    test()
+
 
 
 
