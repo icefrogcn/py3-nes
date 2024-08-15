@@ -28,7 +28,7 @@ from renderer import lookup_l,lookup_h,lookup_NtAt
 
 
 
-@jitclass
+#@jitclass
 class PPU(object):
     reg: PPUREG
     
@@ -107,6 +107,9 @@ class PPU(object):
     def SpriteRAM(self):
         return self.reg.SpriteRAM
     @property
+    def SPRAM(self):
+        return self.reg.SpriteRAM
+    @property
     def Palettes(self):
         return self.reg.Palettes
     @property
@@ -148,6 +151,10 @@ class PPU(object):
     @property
     def sp16(self):
         return self.reg.PPUCTRL & self.reg.bit.PPU_SP16_BIT
+
+    @property
+    def spH(self):
+        return 0x10 if self.sp16 else 0x8
 
     
     def Read(self,addr):
@@ -240,7 +247,7 @@ class PPU(object):
         return Tiles
 
     def NTline(self,data):
-        return lookup_l[data[self.TileY]] + lookup_h[data[self.TileY + 8]]
+        return np.add(lookup_l[data[self.TileY]],lookup_h[data[self.TileY + 8]])
 
     @property
     def RowNTline(self):
@@ -303,7 +310,7 @@ class PPU(object):
         if scanline == 0:
             pass
             
-        elif self.CurrentLine < 240:
+        elif scanline < 240:
             if self.IsBGON:#  and (scanline & 7 == 1 or ):
                 self.ScreenArray[scanline]  = self.RowNTline[self.TileX:self.TileX+256]
                 self.ScreenArray[scanline] |= self.RowATline[self.ATX:self.ATX+256]
@@ -311,10 +318,12 @@ class PPU(object):
                 #self.ScreenArray[scanline] |= self.RowATTiles[self.TileY][self.ATX:self.ATX+256]
                 #self.ScreenArray[scanline:scanline + 8 - self.TileY] = self.RowNTTiles[self.TileY:][self.TileX:self.TileX+256]
                 #self.ScreenArray[scanline:scanline + 8 - self.TileY] |= self.RowATTiles[self.TileY:][self.ATX:self.ATX+256]
-
+            
+            self.RenderSprites(scanline)
+            
         
         if scanline == 239:
-            self.RenderSprites()
+            #self.RenderSprites()
             pass
             
         #if scanline > 239:return
@@ -330,9 +339,60 @@ class PPU(object):
 
 '''
                    
-    def RenderSprites(self):
-        if self.IsSPON:
-            self.RenderSpriteArray(self.ScreenArray, self.SpriteRAM)
+    def RenderSprites(self,scanline):
+        if not self.IsSPON:
+            return
+        #self.RenderSpriteArray(self.ScreenArray, self.SpriteRAM)
+        for spriteIndex in range(63,-1,-1):
+            spriteOffset =  spriteIndex << 2
+            spriteY = self.SPRAM[spriteOffset]
+            if spriteY >= 240: continue
+            spriteX = self.SPRAM[spriteOffset + 3]
+            if spriteX >= 248: continue
+            spH = self.spH
+            tileY = scanline - spriteY
+            if not(0 <= tileY < spH):continue
+            
+            if self.sp16:
+                chr_index = ((self.SPRAM[spriteOffset + 1] & 1)<< 8) | ((self.SPRAM[spriteOffset + 1] & 0xFE))
+                if self.SPRAM[spriteOffset + 2] & 0x80:     #垂直翻转
+                    tileY ^= 7;chr_index ^= 1
+                if (tileY & 8):chr_index ^= 1
+            else:
+                chr_index = self.SPRAM[spriteOffset + 1] | self.PPU_SPTBL_TILE_OFFSET
+                if self.SPRAM[spriteOffset + 2] & 0x80:     #垂直翻转
+                    tileY ^= 7
+
+            spTile = self.NTTile(self.GetPT_Tile_data(chr_index))
+            spLine = spTile[tileY & 7]
+
+            if self.SPRAM[spriteOffset + 2] & 0x40:         #左右翻转
+                spLine = spLine[::-1]
+            
+            hiColor = ((self.SPRAM[spriteOffset + 2] & 0x03) << 2) + 0x10
+            #for i in len(spLine):
+                
+            spLine = np.add(spLine,hiColor)
+                    
+            BGPriority = self.SPRAM[spriteOffset + 2] & 0x20 #SP_PRIORITY_BIT
+            
+            
+            if BGPriority:
+                for i,data in enumerate(spLine):
+                    if self.ScreenArray[scanline][spriteX + i] & 3 == 0:
+                        self.ScreenArray[scanline][spriteX + i] = data
+            else:
+                for i,data in enumerate(spLine):
+                    if data & 3 > 0:
+                        self.ScreenArray[scanline][spriteX + i] = data
+
+
+    #@njit
+    def paintScreen(self,isDraw = 1):
+        if isDraw:
+            for i in range(240):
+                for j in range(256):
+                    self.ScreenBuffer[i, j] = self.Pal[self.Palettes[self.ScreenArray[i, j]]]
             
     @property
     def loopy_v(self):
