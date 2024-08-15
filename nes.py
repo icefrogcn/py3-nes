@@ -61,7 +61,7 @@ class NES(object):
     MAPPER:MAPPER
     
     PPUREG:PPUREG
-    PPU:PPU
+    #PPU:PPU
     #CPU:CPU
     APU:APU
     
@@ -276,12 +276,16 @@ class NES(object):
 
 
 def jit_NES_class(jit = 1):
-    global CPU
-    CPU = jit_CPU_class({}, jit = jit)
-    CPU_type = jitType(CPU)
+    global PPU
+    PPU = jit_PPU_class(jit = jit)
+    PPU_type = jitType(PPU)
     
+    global CPU
+    CPU = jit_CPU_class({'PPU': PPU_type}, jit = jit)
+    CPU_type = jitType(CPU)
     NES_spec = {
-            'CPU': CPU_type
+            'CPU': CPU_type,
+            'PPU': PPU_type
             }
     
     return jitObject(NES, NES_spec , jit = jit)
@@ -297,10 +301,9 @@ if __name__ == '__main__':
     nesj = jit_NES_class(jit = 1)()
     #n = nesc()
     #nesj.insertCARD(LoadROM('roms//Sangokushi 2 - Hanou No Tairiku (J).nes'))
-    nesj.insertCARD(LoadROM('roms//1942.nes'))
-    
-    print(nesj)
-    
+    nesj.insertCARD(LoadROM('roms//1944.nes'))
+    #nesj.insertCARD(LoadROM('roms//kage.nes'))
+   
     import cv2
     cv2.namedWindow('Main', cv2.WINDOW_NORMAL)
 
@@ -316,9 +319,9 @@ if __name__ == '__main__':
     
     initMidi()
     while True:
-        JOYPAD_CHK(nesj.CPU.JOYPAD)
         Frames += nesj.run()
         playmidi(nesj.APU)
+        JOYPAD_CHK(nesj.CPU.JOYPAD)
         cv2.imshow("Main", nesj.PPU.ScreenBuffer)
         key = cv2.waitKey(1)
         #print(key)
