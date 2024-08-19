@@ -23,7 +23,6 @@ class ROM(object):
 
         self.data = np.zeros(0x100020, np.uint8)
 
-        self.Mirroring = self.ROMCtrl & 0x1
 
     @property
     def PROM_SIZE(self):
@@ -57,10 +56,10 @@ class ROM(object):
 
     @property
     def Mirroring(self):
-        return self.REG[0]
-    @Mirroring.setter
-    def Mirroring(self,value):
-        self.REG[0] = value
+        return self.ROMCtrl & 0x1
+    #@Mirroring.setter
+    #def Mirroring(self,value):
+        #self.REG[0] = value
 
     def IsVMIRROR(self):
         return self.Mirroring & 1
@@ -180,8 +179,13 @@ def get_Mapper_by_fn(filename):
 
 if __name__ == '__main__':
     rom = ROM()
-    rom.data = nesROM().LoadROM('roms//Contra (J).nes')
-    print (dir(rom))
+    rom.data = LoadROM('roms//Contra (J).nes')
+    rom.info()
+    import os
+    for i,item in enumerate([item for item in os.listdir('roms') if ".nes" in item.lower()]):
+        print(i,item)
+        rom.data = LoadROM('roms//' + item)
+        rom.info()
 
 
 
