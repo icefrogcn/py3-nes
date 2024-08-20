@@ -49,7 +49,9 @@ class PPU(object):
     #NT_BANK:ListType(uint8[::1])
 
     ScreenBuffer:uint8[:,:,::1]
-    FrameBuffer:uint8[:,:,::1]
+    #PalBuffer:uint8[:,:,::1]
+    PTBuffer:uint8[:,:,::1]
+    NTBuffer:uint8[:,:,::1]
     Running:uint8
     render:uint8
     tilebased:uint8
@@ -72,13 +74,16 @@ class PPU(object):
 
         self.PatternTableTiles = np.zeros((0x2000 >> 4, 8, 8),np.uint8)
         self.Pal        = BGRpal
+        
 
         self.ScreenArray = np.zeros((240, 256),np.uint8)
         self.ScreenBuffer = np.zeros((240, 256, 3),np.uint8)
+        #self.PalBuffer = np.zeros((0x20, 3),np.uint8)
         self.ATarray = np.zeros((256, 256),np.uint8)
         #self.NT_BANK = List([np.zeros((240, 256),np.uint8) for i in range(4)])
 
-        self.FrameBuffer = np.zeros((720, 768, 3),np.uint8)
+        self.PTBuffer = np.zeros((256, 128, 3),np.uint8)
+        self.NTBuffer = np.zeros((720, 768, 3),np.uint8)
         
         #self.BGPAL = [0] * 0x10
         #self.SPRPAL = [0] * 0x10
@@ -387,13 +392,7 @@ class PPU(object):
                         self.ScreenArray[scanline][spriteX + i] = data
 
 
-    #@njit
-    def paintScreen(self,isDraw = 1):
-        if isDraw:
-            for i in range(240):
-                for j in range(256):
-                    self.ScreenBuffer[i, j] = self.Pal[self.Palettes[self.ScreenArray[i, j]]]
-            
+           
     @property
     def loopy_v(self):
         return self.reg.loopy_v
@@ -459,8 +458,7 @@ class PPU(object):
         #return
         if self.reg.PPUMASK & (self.reg.bit.PPU_SPDISP_BIT|self.reg.bit.PPU_BGDISP_BIT) == 0 :return
         
-        self.CalcPatternTableTiles()
-
+        
         NTnum = self.reg.PPU_NAMETBL
 
 
@@ -474,11 +472,14 @@ class PPU(object):
        # if self.Mirroring == 0:
             #self.scY = (coarseYscroll << 3) + fineYscroll + ((NTnum>>1) * 240) #if self.loopy_v&0x0FFF else self.scY
             #self.scY = self.reg.vScroll + ((NTnum>>1) * 240) 
-            
+
+        self.CalcPatternTableTiles()
+
         self.RenderNT()
 
         self.RenderSpritesNT()
-        
+
+        self.paintPT()
         #self.paintBuffer()
 
         
@@ -486,8 +487,8 @@ class PPU(object):
         [rows, cols] = self.NTArray.shape
         for i in range(rows):
             for j in range(cols):
-                self.FrameBuffer[i, j] = self.Pal[self.Palettes[self.NTArray[i, j]]]
-        #return FrameBuffer
+                self.NTBuffer[i, j] = self.Pal[self.Palettes[self.NTArray[i, j]]]
+        #return NTBuffer
 
     def blitFrame(self):
         paintBuffer(self.NTArray,self.Pal,self.Palettes)
@@ -587,7 +588,7 @@ class PPU(object):
 
     
 
-    def RenderNameTable(self,AttributeTables, FrameBuffer):
+    def RenderNameTable(self,AttributeTables, NTBuffer):
         tempFrame = np.zeros((257, 257),np.uint8)
         for i in range(len(AttributeTables)):
             col = i >> 3; row = i & 7
@@ -599,13 +600,13 @@ class PPU(object):
             tempFrame[(col << 5) + 16   :(col << 5) + 32 ,  (row << 5) + 16 : (row  << 5) + 32] = (AttributeTables[i] & 0b11000000) >> 4
 
         
-        FrameBuffer |= tempFrame[0:240,0:256]
+        NTBuffer |= tempFrame[0:240,0:256]
 
-        [rows, cols] = FrameBuffer.shape
+        [rows, cols] = NTBuffer.shape
         for i in range(rows):
             for j in range(cols):
-                if FrameBuffer[i,j] & 3 == 0: 
-                    FrameBuffer[i,j] == 0
+                if NTBuffer[i,j] & 3 == 0: 
+                    NTBuffer[i,j] == 0
 
 
 
@@ -695,20 +696,34 @@ class PPU(object):
                                 BGbuffer[spriteY + j, spriteX + i] = SpriteArr[j,i]
 
 
-    #@njit
+
+        #@njit
+ 
     def paintScreen(self,isDraw = 1):
         if isDraw:
             for i in range(240):
                 for j in range(256):
                     self.ScreenBuffer[i, j] = self.Pal[self.Palettes[self.ScreenArray[i, j]]]
 
-#PPU
-#PPU_Memory_type = nb.deferred_type()
-#PPU_Memory_type.define(PPU_Memory.class_type.instance_type)
-#PPU_Reg_type = nb.deferred_type()
-#PPU_Reg_type.define(PPUREG.class_type.instance_type)
-#ROM_class_type = nb.deferred_type()
-#ROM_class_type.define(ROM.class_type.instance_type)
+    def paintPT(self,isDraw = 1):
+        if isDraw:
+            #TileBuff = np.zeros((8,8,3), np.uint8)
+            for i,Tile in enumerate(self.PatternTableTiles):
+                p = i 
+                px = ((i & 0xF) << 3)
+                py = (i & 0x1F0) >> 1
+                for tx in range(8):
+                    for ty in range(8):
+                        self.PTBuffer[ty + py, tx + px] = self.Pal[self.Palettes[Tile[ty, tx]]]
+                #self.PTBuffer[py:py+8,px:px+8] = TileBuff
+
+    def paintPal(self,isDraw = 1):
+        if isDraw:
+            for i in enumerate(self.NES.PPU.Palettes):
+                #self.PalBuffer[i] =  self.NES.PPU.Pal[i]
+                pass
+
+
 '''
 ppu_spec = [('CurrentLine',uint16),
             ('HScroll',uint16),
@@ -728,7 +743,7 @@ ppu_spec = [('CurrentLine',uint16),
            ('FrameNT1',uint8[:,:]),
            ('FrameNT2',uint8[:,:]),
            ('FrameNT3',uint8[:,:]),
-           ('FrameBuffer',uint8[:,:,:]),
+           ('NTBuffer',uint8[:,:,:]),
            ('Running',uint8),
            ('render',uint8),
            ('tilebased',uint8),
