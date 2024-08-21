@@ -27,7 +27,7 @@ from mmu import MMU
 #from apu import APU#,APU_type
 from ppu import PPU, load_PPU, jit_PPU_class
 #from ppu_reg import PPUREG, PPUBIT
-from mapper import MAPPER
+from mapper import MAPPER, jit_MAPPER_class
 from joypad import JOYPAD
 
 
@@ -95,7 +95,7 @@ class CPU6502(object):
     isDraw:uint8
     Frames: uint32
     RenderMethod: uint8
-    ChannelWrite: uint8[:]
+    #ChannelWrite: uint8[:]
     
     JOYPAD: JOYPAD
     Running: uint8
@@ -110,22 +110,22 @@ class CPU6502(object):
     
     def __init__(self,
                  MMU = MMU(),
-                 PPU = PPU()
-                 #ChannelWrite = ChannelWrite,
-                 #JOYPAD = JOYPAD()
+                 PPU = PPU(),
+                 MAPPER = MAPPER(),
+                 JOYPAD = JOYPAD()
                  ):
 
-        #self.AddressMask =0 #Long 'Integer
+        
         self.PC = 0          
-        self.A = np.uint8(0)           
-        self.X = np.uint8(0)             
-        self.Y = np.uint8(0)              
-        self.S = np.uint8(0)               
-        self.P = 0            
-        self.DT = np.uint8(0) 
-        self.WT = np.uint16(0) 
-        self.EA = np.uint16(0)
-        self.ET = np.uint16(0)
+        self.A = 0           
+        self.X = 0             
+        self.Y = 0              
+        self.S = 0               
+        self.P = 0             
+        self.DT = 0
+        self.WT = 0 
+        self.EA = 0
+        self.ET = 0
         self.INT_pending = 0
         self.nmicount = 0
 
@@ -139,10 +139,10 @@ class CPU6502(object):
         self.ZN_Table = np.zeros(256,dtype = np.uint8)
         self.ZN_Table[0] = Z_FLAG
         for i in range(1,256):
-            self.ZN_Table[i] = N_FLAG if i&0x80 else 0
+            self.ZN_Table[i] = i&N_FLAG
 
         self.MMU = MMU
-        self.MAPPER = MAPPER(MMC(self.MMU))
+        self.MAPPER = MAPPER
 
         
         
@@ -156,10 +156,10 @@ class CPU6502(object):
         self.PPU = PPU
         
         #self.APU = APU
-        self.ChannelWrite = self.MMU.ChannelWrite
+        #self.ChannelWrite = self.MMU.ChannelWrite
 
         
-        self.JOYPAD = JOYPAD()
+        self.JOYPAD = JOYPAD
 
         self.RenderMethod = self.MAPPER.RenderMethod
         
@@ -182,6 +182,9 @@ class CPU6502(object):
     @property
     def CPUREG(self):
         return self.MMU.CPUREG
+    @property
+    def ChannelWrite(self):
+        return self.MMU.ChannelWrite
     
         
     @property
@@ -299,7 +302,9 @@ class CPU6502(object):
 
     'STACK'
     def PUSH(self,value):
-        self.STACK[self.S & 0xFF] = value;self.S -= 1;self.S &= 0xFF
+        self.STACK[self.S & 0xFF] = value
+        self.S -= 1
+        self.S &= 0xFF
       
     def POP(self):
         self.S += 1
@@ -487,27 +492,30 @@ class CPU6502(object):
 
     '/* CMP (N-----ZC) */'
     def	CMP(self): 				
-        self.WT = self.A - self.DT			
-        self.TST_FLAG( (self.WT&0x8000)==0, C_FLAG )	
-        self.SET_ZN_FLAG( self.WT )		
+        self.WT = 0x100 + self.A - self.DT			
+        #self.TST_FLAG( (self.WT&0x8000)==0, C_FLAG )	
+        self.TST_FLAG( self.A >= self.DT, C_FLAG )	
+        self.SET_ZN_FLAG( self.WT & 0xFF)		
     
     '/* CPX (N-----ZC) */'
     def	CPX(self):			
-        self.WT = self.X - self.DT		
-        self.TST_FLAG( (self.WT&0x8000)==0, C_FLAG )	
-        self.SET_ZN_FLAG( self.WT )		
+        self.WT = 0x100 + self.X - self.DT		
+        #self.TST_FLAG( (self.WT&0x8000)==0, C_FLAG )	
+        self.TST_FLAG( self.X >= self.DT, C_FLAG )	
+        self.SET_ZN_FLAG( self.WT & 0xFF)		
     
     '/* CPY (N-----ZC) */'
     def	CPY(self) :				
-        self.WT = self.Y - self.DT		
-        self.TST_FLAG( (self.WT&0x8000)==0, C_FLAG )	
-        self.SET_ZN_FLAG( self.WT )
+        self.WT = 0x100 + self.Y - self.DT		
+        #self.TST_FLAG( (self.WT&0x8000)==0, C_FLAG )	
+        self.TST_FLAG( self.Y >= self.DT, C_FLAG )	
+        self.SET_ZN_FLAG( self.WT & 0xFF)
 
     def JMP_ID(self):			
         self.WT = self.OP6502W(self.PC)			
         self.EA = self.RD6502(self.WT)		
         self.WT = (self.WT&0xFF00)|((self.WT+1)&0x00FF)	
-        self.PC = self.EA+self.RD6502(self.WT)*0x100		
+        self.PC = self.EA + self.RD6502(self.WT)*0x100		
 
     def JMP(self):			
         self.PC = self.OP6502W( self.PC )
@@ -757,7 +765,7 @@ class CPU6502(object):
 
     def EmulationCPU(self,basecycles):
         self.base_cycles += basecycles
-        cycles = int(self.base_cycles//12) - self.emul_cycles
+        cycles = int((self.base_cycles//12) - self.emul_cycles)
         if cycles > 0:
             self.emul_cycles += self.EXEC6502(cycles)
 
@@ -1024,7 +1032,9 @@ class CPU6502(object):
       
 
     def reset6502(self):
-        self.A = 0; self.X = 0; self.Y = 0; self.P = Z_FLAG|R_FLAG;#0x22
+        self.A = 0; self.X = 0; self.Y = 0;
+        #self.P = Z_FLAG|R_FLAG;#0x22
+        self.P = Z_FLAG|R_FLAG|I_FLAG #0x26
         self.S = 0xFF
         self.PC = self.RD6502W(RES_VECTOR) #0xFFFC
         self.INT_pending = 0
@@ -1089,12 +1099,12 @@ class CPU6502(object):
         elif bank == 0x01:# or address == 0x4014:
             '$2000-$3FFF'
             #print "PPU Write" ,Address
-            if( address == 2000 and (value & 0x80) and (not (self.PPU.reg.reg[0] & 0x80)) and (self.PPU.reg.reg[2] & 0x80) ):
+            #if( address == 2000 and (value & 0x80) and (not (self.PPU.reg.reg[0] & 0x80)) and (self.PPU.reg.reg[2] & 0x80) ):
                 #if self.MAPPER.Mapper != 69:
                     #self.emul_cycles += self.EXEC6502(1)
                     #self.exec_opcode()
                 #self.emul_cycles += self.EXEC6502(1)
-                self.NMI()
+                #self.NMI()
             self.PPU.Write(address,value)
 
             
@@ -1178,6 +1188,7 @@ class CPU6502(object):
         self.PC += 1
         opcode = self.opcode
 
+        '算术运算指令'
         if opcode ==	0x69: # ADC #$??
             self.MR_IM(); self.ADC();
             self.ADD_CYCLE(2);
@@ -1282,9 +1293,9 @@ class CPU6502(object):
             
         elif opcode ==	0xC8: # INY
             self.INY();
-            self.ADD_CYCLE(2);
+            self.ADD_CYCLE(2)
             
-
+            '逻辑运算指令'
         elif opcode ==	0x29: # AND #$??
             self.MR_IM(); self.AND();
             self.ADD_CYCLE(2);
@@ -1380,7 +1391,7 @@ class CPU6502(object):
             self.MR_IY(); self.EOR(); self.CHECK_EA();
             self.ADD_CYCLE(5);
             
-
+            '算术指令'
         elif opcode ==	0x4A: # LSR A
             self.LSR_A();
             self.ADD_CYCLE(2);
@@ -1747,7 +1758,7 @@ class CPU6502(object):
             self.ADD_CYCLE(6);
             
 
-        # 僼儔僌惂屼宯
+        # 
         elif opcode ==	0x18: # CLC
             self.CLC();
             self.ADD_CYCLE(2);
@@ -1797,7 +1808,7 @@ class CPU6502(object):
             self.ADD_CYCLE(4);
             
 
-        # 偦偺懠
+        # 
         elif opcode ==	0x00: # BRK
             self.BRK();
             self.ADD_CYCLE(7);
@@ -1807,7 +1818,7 @@ class CPU6502(object):
             self.ADD_CYCLE(2);
             
 
-        # 枹岞奐柦椷孮
+        # 
         elif opcode in (0x0B,0x2B): # ANC #$??
         #elif opcode ==	0x2B: # ANC #$??
             self.MR_IM(); self.ANC();
@@ -2152,34 +2163,33 @@ class CPU6502(object):
         elif opcode in (0x02,0x12,0x22,0x32,0x42,0x52,0x62,0x72,0x92,0xB2,0xD2,0xF2): 
             self.PC -= 1;
             self.ADD_CYCLE(4);
-        
-def jit_CPU_class(addition_spec, jit = True):
-    return jitObject(CPU6502, cpu_spec, addition_spec, jit = jit)
-
-def load_CPU(MMU,PPU,addition_spec,jit = True):
-    cpu_class = jit_CPU_class(addition_spec,jit = jit)
-    cpu_type = jitType(cpu_class)
-    cpu = cpu_class(MMU = MMU,
-                    PPU = PPU
-                    #ChannelWrite = consloe.APU.ChannelWrite
-                    )#, #consloe.APU,)
-    return cpu, cpu_type
 
 
-cpu_spec = []
-#CPU,cpu_type = import_CPU_class(cpu_spec,jit = jit)
+def CPU_spec(jit = jit):
+    global MAPPER,MAPPER_type
+    MAPPER = jit_MAPPER_class(jit = jit)
+    MAPPER_type = jitType(MAPPER)
+
+    global PPU,PPU_type
+    PPU = jit_PPU_class(jit = jit)
+    PPU_type = jitType(PPU)
+    
+    cpu_spec = [('PPU', PPU_type),('MAPPER', MAPPER_type)]
+    return cpu_spec
+
+
+def jit_CPU_class(cpu_spec, jit = 1):
+  
+    return jitObject(CPU6502, cpu_spec, jit = jit)
+
+
+
+
 
 if __name__ == '__main__':
-    #cpu_ram = Memory()
-    
-    cpu = jit_CPU_class({})
+    cpu_spec = CPU_spec(jit = 0)
+    cpu = jit_CPU_class(cpu_spec,jit = 0)
 
-    #cpu6502(MMU(),PPU(PPUREG(MMU())))
-    
-    #cpu = cpu6502()
-    #print(cpu)
-    #CPU = jit_CPU_class(CPU6502,{})
-    #print(CPU)
     
         
 
