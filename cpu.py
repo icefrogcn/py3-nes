@@ -315,7 +315,7 @@ class CPU6502(object):
     ' This is where all 6502 instructions are kept.'
     ' ADC (NV----ZC) '
     def ADC(self):
-        self.WT = self.A + self.DT + (self.P & C_FLAG)		
+        self.WT = 0x100 + self.A + self.DT + (self.P & C_FLAG) - 0x100      #fix overflow
         self.TST_FLAG( self.WT > 0xFF, C_FLAG )	
         self.TST_FLAG( ((~(self.A^self.DT)) & (self.A ^ self.WT) & 0x80), V_FLAG )	
         self.A = self.WT & 0xFF		
@@ -323,7 +323,7 @@ class CPU6502(object):
 
     ' SBC (NV----ZC) '
     def SBC(self): 		
-        self.WT = self.A - self.DT - (~self.P & C_FLAG)
+        self.WT = -0x100 + self.A - self.DT - (~self.P & C_FLAG) + 0x100    #fix overflow
         self.TST_FLAG( ((self.A^self.DT) & (self.A^self.WT)&0x80), V_FLAG )
         self.TST_FLAG( self.WT < 0x100, C_FLAG )	
         self.A = self.WT & 0xFF	
