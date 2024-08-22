@@ -18,7 +18,7 @@ def jitObject(classObject, Object_spec, ObjectAddition={}, jit = True):
                 return jitObject
         except:
             print(traceback.print_exc())
-    Log_SYS(f'{classObject.__name__} No jit')
+    Log_SYS(f'{classObject.__name__} not jit')
     return classObject    
 
 def jitType(jitObject):

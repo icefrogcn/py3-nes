@@ -25,6 +25,16 @@ class ROM(object):
 
 
     @property
+    def NESHEADER_SIZE(self):
+        return 0x10
+    @property
+    def NESHEADER(self):
+        return self.data[:NESHEADER_SIZE]
+    @property
+    def ROMDATA(self):
+        return self.data[NESHEADER_SIZE:]
+
+    @property
     def PROM_SIZE(self):
         return self.PROM_16K_SIZE
     @property
@@ -35,14 +45,15 @@ class ROM(object):
         if self.VROM_SIZE:
             return self.VROM_SIZE - 1
     
+    
     @property
     def PROM(self):
-        return self.data[16: self.PROM_SIZE * 0x4000 + 16]
+        return self.ROMDATA[: self.PROM_SIZE * 0x4000]
     @property
     def VROM(self):
-        PrgMark = self.PROM_SIZE * 0x4000 + 16
+        PrgMark = self.PROM_SIZE * 0x4000
         if self.VROM_SIZE:
-            return self.data[PrgMark: self.VROM_SIZE * 0x2000 + PrgMark]
+            return self.ROMDATA[PrgMark: self.VROM_SIZE * 0x2000 + PrgMark]
         else:
             return np.zeros(0x0, np.uint8)
 
@@ -105,9 +116,6 @@ class ROM(object):
     def ROMCtrl2(self):
         return self.data[7]
 
-    @property
-    def NESHEADER_SIZE(self):
-        return 0x20
     
     def info(self):
     

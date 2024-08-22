@@ -1,8 +1,17 @@
 #_*_coding:utf-8*_
 import time
+from numba import jit
+
+@jit
+def LOGSYS(*args):
+    print('SYSTEM:',' '.join(args) if len(args)>1 else args)
 
 def Log_SYS(*args):
     print(print_now(),'SYSTEM:',' '.join(args))
+
+@jit
+def LOGHW(*args):
+    print('HARDWARE:',' '.join(args))
 
 def Log_HW(*args):
     print(print_now(),'HARDWARE:',' '.join(args))
@@ -46,4 +55,4 @@ def err_print(e):
 
 if __name__ == '__main__':
     pass
-
+    LOGSYS('1','2')

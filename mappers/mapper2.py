@@ -34,7 +34,6 @@ class MAPPER(object):
 
         patch = 0
 
-        return 1
     
     def Write(self,addr,data):#$8000-$FFFF Memory write
         self.MMC.SetPROM_16K_Bank(4, data )
