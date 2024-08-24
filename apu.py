@@ -79,6 +79,7 @@ class APU(object):
     lastFrame:uint16[:]
     stopTones:uint8[:]
 
+    ChannelStatus:uint8[:]
     notes_on:uint8[:,::1]
     notes_off:uint8[:,::1]
 
@@ -97,6 +98,8 @@ class APU(object):
 
         self.lastFrame = np.zeros(nVolumeChannel,np.uint16)
         self.stopTones = np.zeros(nVolumeChannel,np.uint8)
+
+        self.ChannelStatus = np.zeros(nVolumeChannel,np.uint8)
 
         self.notes_on = np.zeros((nVolumeChannel,4),np.uint8)
         self.notes_off = np.zeros((nVolumeChannel,4),np.uint8)
@@ -140,10 +143,11 @@ class APU(object):
 
 
     
-    def updateSounds(self,Frames):
+    async def updateSounds(self,Frames):
+        self.ChannelStatus = self.ChannelWrite[:]
+        
         self.set_FRAMES(Frames)
-        #print self.Sound[0:0x16]
-        #print self.Frames, self.doSound
+        
         if self.doSound :
             #print 'playing'
             self.ReallyStopTones()
@@ -194,7 +198,7 @@ class APU(object):
             #self.stopTone(channel)
             
     def PlayRect(self,ch):
-        volume = self.Sound[ch * 4 + 0] & 15
+        volume = (self.Sound[ch * 4 + 0] & 15) 
         frequency = self.Sound[ch * 4 + 2]  + (self.Sound[ch * 4 + 3] & 7) * 256 + 1
         self.playfun(ch, frequency, volume)
    
@@ -248,7 +252,7 @@ class APU(object):
             self.notes_on[channel][1:] = note_on
             
             #midiout.send_message(note_on)
-            #'midiOutShortMsg mdh, &H90 Or tone * 256 Or channel Or volume * 65536'
+
 
     def ToneOff(self, channel,tone):
         #if self.available_ports :
@@ -465,6 +469,10 @@ def initMidi():
     midiout.send_message([0xC3,127]) #Noise. Used gunshot. Poor but sometimes works.'
     #return midiout
 
+def updateSounds(f):
+    global apu
+    apu.updateSounds(f)
+    
 def playmidi(APU):
     for ch in range(4):
         #print(apu.notes[note])
@@ -476,7 +484,7 @@ def playmidi(APU):
             APU.notes_on[ch][0] = 0
             midiout.send_message(APU.notes_on[ch][1:])
 
-def playfile(sf):
+async def playfile(sf):
     global apu
     s = bytearray(np.fromfile(sf,dtype=np.uint8)).decode('utf8').split('\n')
     for fsound in s:
@@ -489,12 +497,18 @@ def playfile(sf):
         apu.Sound[0:0x100] = sdata
         apu.MMU.ChannelWrite[0:0x10] = cw
             
-        apu.updateSounds(f)
+        updateSounds(f)
 
         playmidi(apu)
             
         while time.time()-t<0.016:
             pass
+
+def stopmidi():
+    midiout.send_message([0x80, 60, 0])
+    midiout.send_message([0x81, 60, 0])
+    midiout.send_message([0x82, 60, 0])
+    midiout.send_message([0x83, 60, 0])
 
 if __name__ == '__main__':
     print(getTone(300))
@@ -505,7 +519,15 @@ if __name__ == '__main__':
     note_on = [0x93, 60, 112] # channel 1, middle C, velocity 112
     note_off = [0x83, 60, 0]
     #apu.midiout.send_message([192,127])
-    midiout.send_message(note_on)
+    #midiout.send_message(note_on)
+    time.sleep(0.5)
+    midiout.send_message([0x90, 60, 30])
+    time.sleep(0.5)
+    midiout.send_message([0x80, 60, 0])
+    time.sleep(0.5)
+    midiout.send_message([0x90, 60, 100])
+    time.sleep(0.5)
+    midiout.send_message([0x80, 60, 0])
     time.sleep(0.5)
     notes = np.zeros((12,3),np.uint8)
     note_on = np.array([0x93, 60, 112],np.uint8) # channel 1, middle C, velocity 112
@@ -514,7 +536,8 @@ if __name__ == '__main__':
     midiout.send_message(notes[3])
     time.sleep(0.5)
 
-    playfile('sounddata.txt')
+    import asyncio
+    asyncio.run(playfile('sounddata.txt'))
     
 
 
