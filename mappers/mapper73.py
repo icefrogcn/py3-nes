@@ -6,40 +6,35 @@ import numba as nb
 import numpy as np
 
 import spec
-
 from mmc import MMC
+mapper_spec = []
 
 @jitclass
 class MAPPER(object):
     MMC: MMC
     
-    def __init__(self,cartridge = MMC()):
-        self.cartridge = cartridge
+    def __init__(self,MMC = MMC()):
+        self.MMC = MMC
 
-    def reset(self):
-        self.cartridge.SetPROM_32K_Bank(0,
-                                        1,
-                                        self.cartridge.ROM.PROM_8K_SIZE-2,
-                                        self.cartridge.ROM.PROM_8K_SIZE-1)
-
-	#patch = 0
-            
-        return 1
-
+    @property
+    def RenderMethod(self):
+        return 0
     @property
     def Mapper(self):
         return 73
 
-    def WriteLow(self,address,data):
-        self.cartridge.WriteLow(address,data)
+    
+    def reset(self):
+        self.MMC.SetPROM_32K_Bank(0,1,self.MMC.PROM_8K_SIZE-2,
+                                    self.MMC.PROM_8K_SIZE-1)
 
-    def ReadLow(self,address):
-        return self.cartridge.ReadLow(address)
-    
-    
+	#patch = 0
+            
+
+     
     def Write(self,addr,data):#$8000-$FFFF Memory write
         if addr == 0xF000:
-            self.cartridge.SetPROM_16K_Bank(4, data )
+            self.MMC.SetPROM_16K_Bank(4, data )
 
 
 

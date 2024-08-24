@@ -9,6 +9,7 @@ __all__ = ['mapper0',
            'mapper4',
            'mapper19',
            'mapper23',
+           'mapper65',
            'mapper73'
            ]
 

@@ -17,16 +17,16 @@ from numba.types import u1,u2,ListType
 import numpy as np
 import numba as nb
 
-from jitcompile import jitObject
+from jitcompile import jitObject,jitType
 
 
-from mmc import MMC
+from mmc import MMC,import_MMC_class
 
 from mappers import *
 #import mappers
 
 
-@jitclass
+#@jitclass
 class MAPPER(object):
     
     MMC:MMC
@@ -37,6 +37,8 @@ class MAPPER(object):
     MAPPER4:mapper4.MAPPER
     MAPPER19:mapper19.MAPPER
     MAPPER23:mapper23.MAPPER
+    MAPPER65:mapper65.MAPPER
+    MAPPER73:mapper73.MAPPER
     #M_List:ListType(L)
     
     
@@ -51,6 +53,8 @@ class MAPPER(object):
         self.MAPPER4 = mapper4.MAPPER(self.MMC)
         self.MAPPER19 = mapper19.MAPPER(self.MMC)
         self.MAPPER23 = mapper23.MAPPER(self.MMC)
+        self.MAPPER65 = mapper65.MAPPER(self.MMC)
+        self.MAPPER73 = mapper73.MAPPER(self.MMC)
         #self.M_List.append(self.MAPPER0)
         #self.M_List.append(self.MAPPER2)
         
@@ -89,6 +93,10 @@ class MAPPER(object):
 
         elif self.Mapper == 23:
             self.MAPPER23.reset()
+        elif self.Mapper == 65:
+            self.MAPPER65.reset()
+        elif self.Mapper == 73:
+            self.MAPPER73.reset()
 
         print('reset mapper',self.Mapper)
 
@@ -113,6 +121,10 @@ class MAPPER(object):
             
         elif self.Mapper == 23:
             self.MAPPER23.Write(addr,data)
+        elif self.Mapper == 65:
+            self.MAPPER65.Write(addr,data)
+        elif self.Mapper == 73:
+            self.MAPPER73.Write(addr,data)
         else:
             #print('Write mapper',self.Mapper)
             pass
@@ -196,20 +208,22 @@ class MAPPER(object):
     def resetn(self):
         self.MAPPERS().reset()
 
+def MAPPER_spec(jit = jit):
+    addition_spec = {
+            
+            }
+    return addition_spec
 
+def jit_MAPPER_class(jit = 1):
+    return jitObject(MAPPER, MAPPER_spec(jit = jit), jit = jit)
 
         
 if __name__ == '__main__':
-    #mapper = import_MAPPER()
-    #print(mapper)
+    mapper = import_MAPPER_class(0)()
     from rom import LoadROM
-    from mmu import MMU
     data = LoadROM('roms//kage.nes')
-    MMU = MMU()
-    MMU.ROM.data = data
-    mmc = MMC(MMU)
-    m = MAPPER(mmc)
-    #m = MAPPER()
+    mapper.MMC.MMU.ROM.data = data
+    print(mapper)
     
 
 
