@@ -16,6 +16,8 @@ spec = [('Joypad',uint8[:]),
         ('padbit',uint16[:]),
         ('pad1bit',uint32),
         ('pad2bit',uint32),
+        ('pad3bit',uint32),
+        ('pad4bit',uint32),
         ('padcnt',uint8[:,:]),
         ('bStrobe',uint8),
         ('Joypad_Count',uint8)
@@ -32,6 +34,8 @@ class JOYPAD(object):
         #self.Joypad = [0x00] * 0x8
         self.pad1bit = 0
         self.pad2bit = 0
+        self.pad3bit = 0
+        self.pad4bit = 0
         self.padcnt = np.zeros((0x4,2), np.uint8)
 
         self.ren15fps = np.array([1,1,0,0], np.uint8)
@@ -44,31 +48,31 @@ class JOYPAD(object):
         return np.uint8(0x1)
     @property
     def btn_B(self):
-        return np.uint8(0x2)#<< 1
+        return np.uint8(0x2)#1<< 1
     @property
     def btn_SELECT(self):
-        return np.uint8(0x4)#<< 2
+        return np.uint8(0x4)#1<< 2
     @property
     def btn_START(self):
-        return np.uint8(0x8)#<< 3
+        return np.uint8(0x8)#1<< 3
     @property
     def btn_UP(self):
-        return np.uint8(0x10)#<< 4
+        return np.uint8(0x10)#1<< 4
     @property
     def btn_DOWN(self):
-        return np.uint8(0x20)#<< 5
+        return np.uint8(0x20)#1<< 5
     @property
     def btn_LEFT(self):
-        return np.uint8(0x40)#<< 6
+        return np.uint8(0x40)#1<< 6
     @property
     def btn_RIGHT(self):
-        return np.uint8(0x80)#<< 7
+        return np.uint8(0x80)#1<< 7
     @property
     def btn_AAA(self):
-        return np.uint16(0x100)#<< 8
+        return np.uint16(0x100)#1<< 8
     @property
     def btn_BBB(self):
-        return np.uint16(0x200)#<< 9
+        return np.uint16(0x200)#1<< 9
     @property
     def btn_RELEASE(self):
         return 0x40
@@ -120,6 +124,8 @@ class JOYPAD(object):
     def Strobe(self):
         self.pad1bit = self.padbit[0]
         self.pad2bit = self.padbit[1]
+        self.pad3bit = self.padbit[2]
+        self.pad4bit = self.padbit[3]
         
     def SyncSub(self):
         self.padbit[0] = self.chk_Rapid(self.pad1bit)
@@ -159,18 +165,19 @@ class JOYPAD(object):
         #print self.Joypad_Count
         data = 0x00
         if addr == 0x4016:
-            
             data = self.pad1bit & 0x1
             self.pad1bit >>= 1
+            data |= (self.pad3bit & 0x1) << 1
+            self.pad3bit >>= 1
             
-        
         if addr == 0x4017:
             data = self.pad2bit & 0x1
             self.pad2bit >>= 1
 
-
         return data
 
+    def reset(self):
+        self.pad1bit = self.pad2bit = 0
 
 JOYPAD_type = nb.deferred_type()
 JOYPAD_type.define(JOYPAD.class_type.instance_type)
@@ -183,11 +190,11 @@ P1_PAD = ['k','j','v','b','w','s','a','d','i','u']
 
 def JOYPAD_PRESS(PAD_SET):
     padbit = 0
-    for i,key in enumerate(P1_PAD):
+    for i,key in enumerate(PAD_SET):
         if keyboard.is_pressed(key):padbit |= 1 << i
     return padbit
 
-    
+
 def JOYPAD_CHK(JOYPAD):
     JOYPAD.pad1bit = JOYPAD_PRESS(P1_PAD)
     JOYPAD.SyncSub()

@@ -792,18 +792,7 @@ class CPU6502(object):
     def EmulateFrame(self,isDraw=1):
         scanline = 0
         while self.Running:
-            #if self.isFrameRender:
-            #    self.FrameFlag &= ~self.FRAME_RENDER
-            #    return self.FRAME_RENDER
-            #if self.isDraw:
-                #continue
 
-            #if self.isFrameSound:
-            #    self.FrameFlag &= ~self.FrameSound
-            #    return self.FrameSound
-
-            #if self.PPU.CurrentLine in (0,131):
-            #    self.FrameFlag |= self.FrameSound
 
             
             
@@ -1028,13 +1017,13 @@ class CPU6502(object):
     @property
     def status(self):
         "PC:%d,clockticks:%d PPUSTATUS:%d,Frames %d,CurrLine:%d a:%d X:%d Y:%d S:%d p:%d opcode:%d "
-        return self.PC,self.exec_cycles,self.PPU.reg.PPUSTATUS,self.Frames,self.PPU.CurrentLine,self.A,self.X,self.Y,self.S,self.P,self.opcode
+        return self.PC,self.exec_cycles,self.PPU.reg.reg[2],self.Frames,self.PPU.CurrentLine,self.A,self.X,self.Y,self.S,self.P,self.opcode
       
 
     def reset6502(self):
         self.A = 0; self.X = 0; self.Y = 0;
-        #self.P = Z_FLAG|R_FLAG;#0x22
-        self.P = Z_FLAG|R_FLAG|I_FLAG #0x26
+        self.P = Z_FLAG|R_FLAG;#0x22
+        #self.P = Z_FLAG|R_FLAG|I_FLAG #0x26
         self.S = 0xFF
         self.PC = self.RD6502W(RES_VECTOR) #0xFFFC
         self.INT_pending = 0

@@ -5,6 +5,7 @@ import time
 import datetime
 
 
+
 from numba.experimental import jitclass
 from numba import uint8,uint16,uint32,uint64
 from numba.typed import Dict
@@ -20,26 +21,26 @@ from jitcompile import jitObject,jitType
 
 
 Log_SYS('import MMU class')
-from mmu import MMU
+from mmu import MMU, jit_MMU_class
 
 
-Log_SYS('import MAPPER class')
-from mmc import MMC
 POST_ALL_RENDER = 0
 PRE_ALL_RENDER  = 1
 POST_RENDER     = 2
 PRE_RENDER      = 3
 TILE_RENDER     = 4
-from mapper import MAPPER
+
+Log_SYS('import MAPPER class')
+from mmc import MMC
+from mapper import MAPPER, jit_MAPPER_class
 
 
 Log_SYS('import PPU CLASS')
 from ppu_reg import PPUREG, PPUBIT
-from ppu import PPU, load_PPU, jit_PPU_class
+from ppu import PPU,jit_PPU_class
 
 Log_SYS('import CPU CLASS')
-#from cpu import CPU6502 as CPU
-from cpu import CPU6502, cpu_spec,jit_CPU_class
+from cpu import CPU6502, jit_CPU_class
 
 
 ScanlineCycles = 1364
@@ -49,6 +50,9 @@ HBlankCycles = 340
 
 Log_SYS('import APU CLASS')
 from apu import APU
+
+Log_SYS('import JOYPAD CLASS')
+from joypad import JOYPAD
 
 
 nes_spec = [
@@ -61,9 +65,11 @@ class NES(object):
     MAPPER:MAPPER
     
     PPUREG:PPUREG
-    #PPU:PPU
-    #CPU:CPU
+    PPU:PPU
+    CPU:CPU6502
     APU:APU
+    JOYPAD:JOYPAD
+    
     
     NES_scanline:uint16
 
@@ -93,7 +99,10 @@ class NES(object):
         self.PPU = PPU(PPUREG(self.MMU))
         print(self.PPU)
         
-        self.CPU = CPU(self.MMU, self.PPU)
+        self.JOYPAD = JOYPAD()
+        print(self.JOYPAD)
+        
+        self.CPU = CPU6502(self.MMU, self.PPU, self.MAPPER, self.JOYPAD)
         print(self.CPU)
 
         self.APU = APU(self.MMU)
@@ -117,11 +126,11 @@ class NES(object):
 
     @property
     def RenderMethod(self):
-        return 0
+        return 3
 
     def EmulationCPU(self,basecycles):
         self.base_cycles += basecycles
-        cycles = (self.base_cycles//12) - self.emul_cycles
+        cycles = int((self.base_cycles//12) - self.emul_cycles)
         if cycles > 0:
             self.emul_cycles += self.CPU.EXEC6502(cycles)
 
@@ -159,6 +168,8 @@ class NES(object):
                             self.EmulationCPU(ScanlineCycles)
                         if isDraw:
                             self.PPU.RenderScanline(scanline)
+                        else:
+                            pass
                         self.PPU.ScanlineNext()
                         if( self.RenderMethod == PRE_ALL_RENDER ):
                             self.EmulationCPU(ScanlineCycles )
@@ -171,6 +182,8 @@ class NES(object):
                             self.EmulationCPU(HDrawCycles)
                         if isDraw:
                             self.PPU.RenderScanline(scanline)
+                        else:
+                            pass
 
                         if( self.RenderMethod == PRE_RENDER ):
                             self.EmulationCPU(HDrawCycles)
@@ -242,11 +255,11 @@ class NES(object):
         self.MMU.ROM.info()
     
     def PowerON(self):
-        print('NES Power ON')
+        LOGHW('NES Power ON')
         self.reset()
         
     def reset(self):
-        print('RESET')
+        LOGHW('NES RESET')
         self.Frames = 0
         
         self.MMU.reset()
@@ -258,32 +271,54 @@ class NES(object):
         self.PPU.reset()
 
         self.CPU.reset6502()
-        print ('6502 reset:', self.CPU.status )  
+
+        self.JOYPAD.reset()
+        
 
 
         self.base_cycles = self.emul_cycles = 0
 
     def run(self,isDraw = 1):
         self.Frames += self.EmulateFrame(isDraw)
+        self.APU.updateSounds(self.Frames) 
         self.PPU.paintScreen(isDraw)
-        self.APU.updateSounds(self.Frames)
+        if self.PPU.showNT:
+            self.PPU.paintVRAM(isDraw)
+        if self.PPU.showPT:
+            self.PPU.paintPT(isDraw)
         
-        return 1
+        return self.Frames
 
 
 
+class nesjit():
+    MMU = 1
+    MMC = 1
+    MAPPER = 1
+    PPU = 1
+    CPU = 1
+    @property
+    def NES(self):
+        return 1 if self.CPU&self.PPU else 0 
 
-
-
-def jit_NES_class(jit = 1):
+def import_NES_class(jit = 1):
+    
+    global MAPPER
+    MAPPER = jit_MAPPER_class(jit = jit)
+    MAPPER_type = jitType(MAPPER)
+    
     global PPU
     PPU = jit_PPU_class(jit = jit)
     PPU_type = jitType(PPU)
     
-    global CPU
-    CPU = jit_CPU_class({'PPU': PPU_type}, jit = jit)
-    CPU_type = jitType(CPU)
+    global CPU6502
+    CPU6502 = jit_CPU_class(
+            {'MAPPER': MAPPER_type,
+            'PPU': PPU_type}, jit = jit)
+    CPU_type = jitType(CPU6502)
+
     NES_spec = {
+            'MAPPER': MAPPER_type,
             'CPU': CPU_type,
             'PPU': PPU_type
             }
@@ -291,23 +326,47 @@ def jit_NES_class(jit = 1):
     return jitObject(NES, NES_spec , jit = jit)
 
 def load_NES(jit = 1):
-    nes_class, nes_type = import_NES_class(jit = jit)
-    return nes_class, nes_type        
+    nes_class = import_NES_class(jit)
+    return nes_class()    
 
-
+async def FPS():
+        loop = asyncio.get_running_loop()
+        end_time = loop.time() + 5.0
+        sf = nes.Frames
+        while True:
+            if (loop.time() + 1.0) >= end_time:
+                break
+            await asyncio.sleep(1)
+            t = time.time() - st
+            fps = (nes.Frames - sf) // t
+            cv2.setWindowTitle('Main',f'{fps}')
+            
+        
+async def show():
+        cv2.imshow("Main", nes.PPU.ScreenBuffer)
+        key = cv2.waitKey(1)
+        
+async def run():
+        while True:
+            nes.run()
+            JOYPAD_CHK(nes.JOYPAD)
+            playmidi(nes.APU)
+            await show()
+            #await FPS()
 if __name__ == '__main__':
     from rom import LoadROM
 
-    nesj = jit_NES_class(jit = 1)()
-    #n = nesc()
-    #nesj.insertCARD(LoadROM('roms//Sangokushi 2 - Hanou No Tairiku (J).nes'))
-    nesj.insertCARD(LoadROM('roms//1944.nes'))
-    #nesj.insertCARD(LoadROM('roms//kage.nes'))
+    nes = load_NES(1)
+    #nes.insertCARD(LoadROM('roms//Sangokushi 2 - Hanou No Tairiku (J).nes'))
+    #nes.insertCARD(LoadROM('roms//CONTRA.NES'))
+    #nes.insertCARD(LoadROM('roms//1944.nes'))
+    nes.insertCARD(LoadROM('roms//1942.nes'))
+    #nes.insertCARD(LoadROM('roms//kage.nes'))
    
     import cv2
     cv2.namedWindow('Main', cv2.WINDOW_NORMAL)
 
-    nesj.PowerON()
+    nes.PowerON()
 
     Frames = 0
 
@@ -316,17 +375,13 @@ if __name__ == '__main__':
 
     from joypad import JOYPAD_CHK
     import keyboard
+
+    import asyncio
     
     initMidi()
-    while True:
-        Frames += nesj.run()
-        playmidi(nesj.APU)
-        JOYPAD_CHK(nesj.CPU.JOYPAD)
-        cv2.imshow("Main", nesj.PPU.ScreenBuffer)
-        key = cv2.waitKey(1)
-        #print(key)
-        
 
+    
+    asyncio.run(run())      #协程模式运行
 
 
 
