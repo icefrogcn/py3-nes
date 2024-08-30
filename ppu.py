@@ -19,14 +19,10 @@ from mmu import MMU
 
 from ppu_reg import PPUREG, PPUBIT
 
-
 from pal import BGRpal
-
 
 from renderer import lookup_l,lookup_h,lookup_NtAt
      
-
-
 
 #@jitclass
 class PPU(object):
@@ -58,6 +54,10 @@ class PPU(object):
     #debug:uint8
     ScanlineSPHit:uint8[:]
 
+
+    showNT:uint8
+    showPT:uint8
+
     def __init__(self, reg = PPUREG()):
         self.reg = reg
 
@@ -82,7 +82,7 @@ class PPU(object):
         self.ATarray = np.zeros((256, 256),np.uint8)
         #self.NT_BANK = List([np.zeros((240, 256),np.uint8) for i in range(4)])
 
-        self.PTBuffer = np.zeros((256, 128, 3),np.uint8)
+        self.PTBuffer = np.zeros((128, 384, 3),np.uint8)
         self.NTBuffer = np.zeros((720, 768, 3),np.uint8)
         
         #self.BGPAL = [0] * 0x10
@@ -96,7 +96,7 @@ class PPU(object):
         
         self.ScanlineSPHit = np.zeros(257, np.uint8)
 
-        
+        self.showNT = self.showPT = 0
 
         
     @property
@@ -125,9 +125,6 @@ class PPU(object):
         return self.MMU.NT_BANK
 
 
-    #@property
-    #def ROM(self):
-    #    return self.ROM
     @property
     def PPU_MEM_BANK(self):
         return self.reg.PPU_MEM_BANK
@@ -147,7 +144,9 @@ class PPU(object):
         #self.debug = debug
         
     def reset(self):
-        
+        self.ScreenArray[:] = 0
+        self.NTBuffer[:] = 0
+        self.PTBuffer.fill(0)
         self.reg.reset()
         
 
@@ -172,7 +171,10 @@ class PPU(object):
     def VBlankStart(self):
         self.reg.reg[2] |= 0x80     #PPU_VBLANK_FLAG
     def VBlankEnd(self):
-        self.reg.PPUSTATUS_ZERO()
+        self.reg.PPUSTATUS = 0
+        #self.reg.reg[2] &= ~0x80
+        #self.reg.reg[2] &= ~0x40
+        
  
     def CurrentLine_ZERO(self):
         self.CurrentLine = 0
@@ -316,46 +318,40 @@ class PPU(object):
             pass
             
         elif scanline < 240:
-            if self.IsBGON:#  and (scanline & 7 == 1 or ):
-                self.ScreenArray[scanline]  = self.RowNTline[self.TileX:self.TileX+256]
-                self.ScreenArray[scanline] |= self.RowATline[self.ATX:self.ATX+256]
-                #self.ScreenArray[scanline]  = self.RowNTTiles[self.TileY][self.TileX:self.TileX+256]
-                #self.ScreenArray[scanline] |= self.RowATTiles[self.TileY][self.ATX:self.ATX+256]
-                #self.ScreenArray[scanline:scanline + 8 - self.TileY] = self.RowNTTiles[self.TileY:][self.TileX:self.TileX+256]
-                #self.ScreenArray[scanline:scanline + 8 - self.TileY] |= self.RowATTiles[self.TileY:][self.ATX:self.ATX+256]
-            
+            self.RenderBG(scanline)
             self.RenderSprites(scanline)
-            
-        
-        if scanline == 239:
-            #self.RenderSprites()
-            pass
-            
-        #if scanline > 239:return
 
+        #if scanline > self.SpriteRAM[0] + 8:
+            #self.reg.reg[2] |=  0x40 #PPU_SPHIT_FLAG
 
-        if scanline > self.SpriteRAM[0] + 8:
-            self.reg.PPUSTATUS = self.reg.PPUSTATUS | 0x40 #PPU_SPHIT_FLAG
+        #self.ScanlineSPHit[scanline] =  1 if self.reg.PPUSTATUS & self.reg.bit.PPU_SPHIT_FLAG else 0
 
-
-        self.ScanlineSPHit[scanline] =  1 if self.reg.PPUSTATUS & self.reg.bit.PPU_SPHIT_FLAG else 0
-
-        '''self.sp_h = 16 if self.Control1 & PPU_SP16_BIT else 8
-
-'''
-                   
+    def RenderBG(self,scanline):
+        if self.IsBGON:#  and (scanline & 7 == 1 or ):
+            self.ScreenArray[scanline]  = self.RowNTline[self.TileX:self.TileX+256]
+            self.ScreenArray[scanline] |= self.RowATline[self.ATX:self.ATX+256]
+            #self.ScreenArray[scanline]  = self.RowNTTiles[self.TileY][self.TileX:self.TileX+256]
+            #self.ScreenArray[scanline] |= self.RowATTiles[self.TileY][self.ATX:self.ATX+256]
+            #self.ScreenArray[scanline:scanline + 8 - self.TileY] = self.RowNTTiles[self.TileY:][self.TileX:self.TileX+256]
+            #self.ScreenArray[scanline:scanline + 8 - self.TileY] |= self.RowATTiles[self.TileY:][self.ATX:self.ATX+256]
+            #LeftClipif
+        else:
+             self.ScreenArray[scanline] = 0
+             
     def RenderSprites(self,scanline):
+        self.reg.reg[2] &=  ~0x20 #PPU_SPMAX_FLAG
         if not self.IsSPON:
             return
-        #self.RenderSpriteArray(self.ScreenArray, self.SpriteRAM)
-        for spriteIndex in range(63,-1,-1):
-            spriteOffset =  spriteIndex << 2
-            spriteY = self.SPRAM[spriteOffset]
-            if spriteY >= 240: continue
-            spriteX = self.SPRAM[spriteOffset + 3]
-            if spriteX >= 248: continue
-            spH = self.spH
-            tileY = scanline - spriteY
+
+        spH = self.spH
+            
+        for sp_inx in range(63,-1,-1):
+            spriteOffset =  sp_inx << 2
+            sp_Y = self.SPRAM[spriteOffset]
+            if sp_Y >= 240: continue
+            sp_X = self.SPRAM[spriteOffset + 3]
+            if sp_X >= 248: continue
+            tileY = scanline - sp_Y
             if not(0 <= tileY < spH):continue
             
             if self.sp16:
@@ -373,25 +369,33 @@ class PPU(object):
 
             if self.SPRAM[spriteOffset + 2] & 0x40:         #左右翻转
                 spLine = spLine[::-1]
+
+
+            if sp_inx == 0 and (not (self.reg.reg[2] &  0x40)):#PPU_SPHIT_FLAG
+                #BGpos = ((sp_X &0xF8) + ((loopy_shift + (sp_X&7))&8))>>3
+                #BGsft = 8 - ((loopy_shift + sp_X)&7)
+                BGmsk = self.ScreenArray[scanline][sp_X:sp_X + 8]
+                
+                if(spLine & BGmsk).any():
+                    self.reg.reg[2] |= 0x40
             
             hiColor = ((self.SPRAM[spriteOffset + 2] & 0x03) << 2) + 0x10
-            #for i in len(spLine):
                 
             spLine = np.add(spLine,hiColor)
                     
             BGPriority = self.SPRAM[spriteOffset + 2] & 0x20 #SP_PRIORITY_BIT
             
-            
             if BGPriority:
                 for i,data in enumerate(spLine):
-                    if self.ScreenArray[scanline][spriteX + i] & 3 == 0:
-                        self.ScreenArray[scanline][spriteX + i] = data
+                    if self.ScreenArray[scanline][sp_X + i] & 3 == 0:
+                        self.ScreenArray[scanline][sp_X + i] = data
             else:
                 for i,data in enumerate(spLine):
                     if data & 3 > 0:
-                        self.ScreenArray[scanline][spriteX + i] = data
+                        self.ScreenArray[scanline][sp_X + i] = data
 
-
+    def DummyScanline(self,scanline):
+        self.reg.reg[2] &= ~0x20 #PPU_SPMAX_FLAG
            
     @property
     def loopy_v(self):
@@ -462,16 +466,8 @@ class PPU(object):
         NTnum = self.reg.PPU_NAMETBL
 
 
-
-        #if self.Mirroring:
-            #self.scY = (coarseYscroll << 3) + fineYscroll + ((NTnum>>1) * 240) 
-            #self.scX = (coarseXscroll << 3)+ self.loopy_x0 #self.HScroll
         self.scY = self.reg.vScroll + ((NTnum>>1) * 240)
         self.scX = self.reg.HScroll + ((NTnum & 1) * 256)
-            
-       # if self.Mirroring == 0:
-            #self.scY = (coarseYscroll << 3) + fineYscroll + ((NTnum>>1) * 240) #if self.loopy_v&0x0FFF else self.scY
-            #self.scY = self.reg.vScroll + ((NTnum>>1) * 240) 
 
         self.CalcPatternTableTiles()
 
@@ -479,19 +475,15 @@ class PPU(object):
 
         self.RenderSpritesNT()
 
-        self.paintPT()
-        #self.paintBuffer()
-
         
     def paintBuffer(self):
         [rows, cols] = self.NTArray.shape
         for i in range(rows):
             for j in range(cols):
                 self.NTBuffer[i, j] = self.Pal[self.Palettes[self.NTArray[i, j]]]
-        #return NTBuffer
 
     def blitFrame(self):
-        paintBuffer(self.NTArray,self.Pal,self.Palettes)
+        self.paintBuffer(self.NTArray,self.Pal,self.Palettes)
 
     def RenderSpritesNT(self):
         if self.IsSPON:
@@ -623,7 +615,6 @@ class PPU(object):
             
 
             
-            #chr_index = SPRAM[spriteOffset + 1]# + self.GET_PPU_SPTBL >> 4
             if self.sp16:
                 
                 chr_index = ((SPRAM[spriteOffset + 1] & 1)<< 8) | ((SPRAM[spriteOffset + 1] & 0xFE))
@@ -633,14 +624,11 @@ class PPU(object):
                 SpriteArr = np.row_stack((chr_l,chr_h))
                 if SPRAM[spriteOffset + 2] & 0x40:
                     SpriteArr = SpriteArr[:,::-1]
-                    #chr_l = chr_l[:,::-1]
-                    #chr_h = chr_h[:,::-1]
+
                 if SPRAM[spriteOffset + 2] & 0x80:
                     #SpriteArr = np.row_stack((chr_l,chr_h))
                     SpriteArr = SpriteArr[::-1]
-                    #chr_l = chr_l[::-1]
-                    #chr_h = chr_h[::-1]
-                    #chr_l,chr_h = chr_h,chr_l
+
                     
                 
             else:
@@ -649,30 +637,8 @@ class PPU(object):
                 if SPRAM[spriteOffset + 2] & 0x40:SpriteArr = SpriteArr[:,::-1]
                 if SPRAM[spriteOffset + 2] & 0x80:SpriteArr = SpriteArr[::-1]
             
-            '''
-            chr_l = self.NTTile(self.GetPT_Tile_data(chr_index))
-            chr_h = self.NTTile(self.GetPT_Tile_data(chr_index + 1))
-            #chr_l = self.PatternTableTiles[chr_index]
-            #chr_h = self.PatternTableTiles[chr_index + 1]
-     
-                
-            if SPRAM[spriteOffset + 2] & 0x40:
-                chr_l = chr_l[:,::-1]    
-                if self.sp16:
-                    chr_h = chr_h[:,::-1]
-                    
-
-            if SPRAM[spriteOffset + 2] & 0x80:
-                chr_l = chr_l[::-1] 
-                if self.sp16:
-                    chr_h = chr_h[::-1]
-                    chr_l,chr_h = chr_h,chr_l
-            
-            SpriteArr = np.row_stack((chr_l,chr_h)) if self.sp16 else chr_l
-'''
-            #SpriteArr = np.add(SpriteArr, ((SPRAM[spriteOffset + 2] & 0x03) << 2) + 0x10)
             hiColor = ((SPRAM[spriteOffset + 2] & 0x03) << 2) + 0x10
-            #SpriteArr += hiColor
+
             [rows, cols] = SpriteArr.shape
             for i in range(rows):
                 for j in range(cols):
@@ -696,8 +662,19 @@ class PPU(object):
                                 BGbuffer[spriteY + j, spriteX + i] = SpriteArr[j,i]
 
 
+    def paintVRAM(self,isDraw = 1):
+        if isDraw and self.showNT:
+            self.RenderVRAM()
+            for i in range(720):
+                for j in range(768):
+                    self.NTBuffer[i, j] = self.Pal[self.Palettes[self.NTArray[i, j]]]
+            self.NTBuffer[240]  = np.array([0,255,0],np.uint8)
+            self.NTBuffer[480]  = np.array([0,255,0],np.uint8)
+            self.NTBuffer[:,256]  = np.array([0,255,0],np.uint8)
+            self.NTBuffer[:,512]  = np.array([0,255,0],np.uint8)
 
-        #@njit
+
+
  
     def paintScreen(self,isDraw = 1):
         if isDraw:
@@ -705,19 +682,25 @@ class PPU(object):
                 for j in range(256):
                     self.ScreenBuffer[i, j] = self.Pal[self.Palettes[self.ScreenArray[i, j]]]
 
+            'numba Unsupport'
+            #for p in self.Palettes:
+                #self.ScreenBuffer[self.ScreenArray == p] = self.Pal[p]
+            #for i in range(240):
+            #    self.ScreenBuffer[i] = np.array([self.Pal(self.Palettes[p]) for p in self.ScreenArray[i]],np.uint8)
+
     def paintPT(self,isDraw = 1):
-        if isDraw:
+        if isDraw and self.showPT:
             #TileBuff = np.zeros((8,8,3), np.uint8)
             for i,Tile in enumerate(self.PatternTableTiles):
                 p = i 
-                px = ((i & 0xF) << 3)
-                py = (i & 0x1F0) >> 1
+                px = ((i & 0xF) << 3) + ((i & 0x100)>>1)
+                py = (i & 0xF0) >> 1
                 for tx in range(8):
                     for ty in range(8):
                         self.PTBuffer[ty + py, tx + px] = self.Pal[self.Palettes[Tile[ty, tx]]]
                 #self.PTBuffer[py:py+8,px:px+8] = TileBuff
 
-    def paintPal(self,isDraw = 1):
+    def blitPal(self,isDraw = 1):
         if isDraw:
             for i in enumerate(self.NES.PPU.Palettes):
                 #self.PalBuffer[i] =  self.NES.PPU.Pal[i]
