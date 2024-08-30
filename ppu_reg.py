@@ -14,8 +14,9 @@ from mmu import MMU
 
 
 #PPU REGISTER
-
-
+PPU_VBLANK_BIT = 0x80
+PPU_SPHIT_BIT = 0x40
+PPU_SP16_BIT = 0x20
 PPU_BGTBL_BIT = 0x10
 PPU_SPTBL_BIT = 0x08
 PPU_INC32_BIT = 0x04
@@ -105,6 +106,7 @@ class PPUBIT(object):
 class PPUREG(object):
     bit:PPUBIT
     MMU:MMU
+
     reg:uint8[:]
     loopy_x:uint16
     loopy_v:uint16
@@ -171,7 +173,10 @@ class PPUREG(object):
     def read(self,address):
         addr = address & 0xFF
         if addr == 0x02:
-            return self.PPUSTATUS
+            ret = self.reg[2] 
+            self.ScrollToggle = 0   # clear toggle
+            self.reg[2] &= 0x7F     # cleared vblank after reading $2002  ~self.bit.PPU_VBLANK_FLAG
+            return ret#self.PPUSTATUS
         elif addr == 0x04:
             return self.OAMDATA
         elif addr == 0x07:
@@ -211,7 +216,6 @@ class PPUREG(object):
         ' NT t:0001100 00000000 = d:00000011  '
         self.loopy_t = (self.loopy_t & 0xF3FF)|((value & 0x03)<<10)
         self.reg[0] = value
-        #self.PPU_ADDR_INC = 32 if value & 0x04 else 1
 
     @property
     def PPU_BGTBL_BIT(self):
@@ -234,17 +238,19 @@ class PPUREG(object):
     def PPUMASK(self,value):
         self.reg[1] = value
         
+
+
     @property
     def PPUSTATUS(self):        #2002
         ret = self.reg[2] 
-        self.ScrollToggle = 0   # clear toggle
-        self.reg[2] &= 0x7F     # cleared vblank after reading $2002  ~self.bit.PPU_VBLANK_FLAG
+        #self.ScrollToggle = 0   # clear toggle
+        #self.reg[2] &= 0x7F     # cleared vblank after reading $2002  ~self.bit.PPU_VBLANK_FLAG
         return ret
+        #return self.reg[2]
     @PPUSTATUS.setter    
     def PPUSTATUS(self,value):
         self.reg[2] = value
-    def PPUSTATUS_ZERO(self):
-        self.reg[2] = 0
+
         
     'SPR-RAM Address Register(W)'
     @property
