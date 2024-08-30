@@ -175,6 +175,10 @@ class MAPPER(object):
             return self.MAPPER19.Clock(cycle)
         elif self.Mapper == 23:
             return self.MAPPER23.Clock(cycle)
+        elif self.Mapper == 65:
+            return self.MAPPER65.Clock(cycle)
+        elif self.Mapper == 73:
+            return self.MAPPER73.Clock(cycle)
         return False
 
     
