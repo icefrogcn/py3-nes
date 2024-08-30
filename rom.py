@@ -1,4 +1,5 @@
 # -*- coding: UTF-8 -*-
+import os
 
 from numba  import jit
 from numba.experimental import jitclass
@@ -6,11 +7,6 @@ from numba import int8,uint8,int16,uint16
 import numpy as np
 import numba as nb
 
-
-
-#自定义类
-#from deco import *
-#from wrfilemod import read_file_to_array
 
 
 @jitclass
@@ -29,10 +25,10 @@ class ROM(object):
         return 0x10
     @property
     def NESHEADER(self):
-        return self.data[:NESHEADER_SIZE]
+        return self.data[:self.NESHEADER_SIZE]
     @property
     def ROMDATA(self):
-        return self.data[NESHEADER_SIZE:]
+        return self.data[self.NESHEADER_SIZE:]
 
     @property
     def PROM_SIZE(self):
@@ -59,7 +55,7 @@ class ROM(object):
 
     @property
     def Mapper(self):
-        return self.ROMCtrl2 + ((self.ROMCtrl & 0xF0) >> 4)
+        return (self.ROMCtrl2 & 0xF0) | ((self.ROMCtrl & 0xF0) >> 4)
 
     @property
     def Trainer(self):
@@ -129,7 +125,11 @@ class ROM(object):
             print ("Error: Trainer not yet supported.") 
 
 
-class nesROM():
+class ROMHOUSE():
+
+    #ROMS_DIR = os.getcwd()+ '\\roms\\'
+    ROMS_DIR = 'F:\\individual_\\Amuse\\EMU\\FCSpec\\' 
+
 
     def __init__(self):
         pass
@@ -137,7 +137,6 @@ class nesROM():
 
     def LoadROM(self,filename):
 
-        #self.data = np.array(read_file_to_array(filename),dtype=np.uint8)
         self.data = np.fromfile(filename,dtype=np.uint8)
         
         if ''.join([chr(i) for i in self.data[:0x4]]) == 'NES\x1a':
@@ -145,15 +144,35 @@ class nesROM():
         else:
             print(f'{filename} Invalid Header')
             return 0
-        
-        #self.ROM = ROM(self.data)
 
-        #self.ROM.info()
-        
-        
-    
-        return self.data#self.ROM
-            
+    @classmethod
+    def calculate_Mapper(cls, NESHEADER):
+        return  ((NESHEADER[6] & 0xF0) >> 4) | (NESHEADER[7] & 0xF0)
+    @classmethod
+    def get_Mapper_by_fn(cls, filename):
+        return cls.calculate_Mapper(np.fromfile(filename,dtype=np.uint8))        
+                        
+    @classmethod
+    @property
+    def roms_list(cls):
+        return [item for item in os.listdir(cls.ROMS_DIR) if ".nes" in item.lower()]
+
+    @classmethod
+    def get_roms_mapper(cls, roms_list):
+        roms_info = []
+        for i,item in enumerate(roms_list):
+            mapper = cls.get_Mapper_by_fn(cls.ROMS_DIR + item)
+            #if mapper in [0,2]:
+                
+            roms_info.append([i,item, mapper])
+        return roms_info
+    @classmethod
+    def show_choose(cls, ROMS_INFO):
+        for item in ROMS_INFO:
+            print (item[0],item[1],item[2])
+        print ("---------------")
+        print ('choose a number as a selection.')
+
     def info(self):
     
         print (f"[ {self.ROM.PROM_16K_SIZE:3} ] 16kB ROM Bank(s)")
@@ -168,7 +187,6 @@ class nesROM():
 
 def LoadROM(filename):
 
-        #self.data = np.array(read_file_to_array(filename),dtype=np.uint8)
         data = np.fromfile(filename,dtype=np.uint8)
         
         if ''.join([chr(i) for i in data[:0x4]]) == 'NES\x1a':
@@ -178,23 +196,27 @@ def LoadROM(filename):
             return 0
         return data
         
-def calculate_Mapper(NESHEADER):
-    return  (NESHEADER[6] & 0xF0) // 16 + NESHEADER[7]
 
-def get_Mapper_by_fn(filename):
-    return calculate_Mapper(np.fromfile(filename,dtype=np.uint8))
+class nesjit():
+    MMU = 1
+    MMC = 1
+    MAPPER = 1
+    PPU = 1
+    CPU = 1
+    
+    @classmethod
+    @property
+    def NES(cls):
+        return 1 if cls.CPU&cls.PPU&cls.MAPPER&cls.MMC&cls.MMU else 0 
 
-
+    
 if __name__ == '__main__':
-    rom = ROM()
-    rom.data = LoadROM('roms//Contra (J).nes')
-    rom.info()
-    import os
-    for i,item in enumerate([item for item in os.listdir('roms') if ".nes" in item.lower()]):
-        print(i,item)
-        rom.data = LoadROM('roms//' + item)
-        rom.info()
-
+    #rom = ROM()
+    #rom.data = LoadROM('roms//Contra (J).nes')
+    #rom.info()
+    ROMS = ROMHOUSE.roms_list
+    ROMS_INFO = ROMHOUSE.get_roms_mapper(ROMS)
+    ROMHOUSE.show_choose(ROMS_INFO)
 
 
 
