@@ -280,26 +280,15 @@ class NES(object):
 
     def run(self,isDraw = 1):
         self.Frames += self.EmulateFrame(isDraw)
-        self.APU.updateSounds(self.Frames) 
+        self.APU.updateSounds() 
         self.PPU.paintScreen(isDraw)
         if self.PPU.showNT:
             self.PPU.paintVRAM(isDraw)
         if self.PPU.showPT:
             self.PPU.paintPT(isDraw)
         
-        return self.Frames
+        #return self.Frames
 
-
-
-class nesjit():
-    MMU = 1
-    MMC = 1
-    MAPPER = 1
-    PPU = 1
-    CPU = 1
-    @property
-    def NES(self):
-        return 1 if self.CPU&self.PPU else 0 
 
 def import_NES_class(jit = 1):
     
@@ -358,10 +347,11 @@ if __name__ == '__main__':
 
     nes = load_NES(1)
     #nes.insertCARD(LoadROM('roms//Sangokushi 2 - Hanou No Tairiku (J).nes'))
-    #nes.insertCARD(LoadROM('roms//CONTRA.NES'))
+    #nes.insertCARD(LoadROM('roms//魂斗罗1代 无限人+散弹枪.nes'))
     #nes.insertCARD(LoadROM('roms//1944.nes'))
-    nes.insertCARD(LoadROM('roms//1942.nes'))
-    #nes.insertCARD(LoadROM('roms//kage.nes'))
+    #nes.insertCARD(LoadROM('roms//1942.nes'))
+    nes.insertCARD(LoadROM('roms//kage.nes'))
+    #nes.insertCARD(LoadROM('roms//Dr Mario (JU).nes'))
    
     import cv2
     cv2.namedWindow('Main', cv2.WINDOW_NORMAL)

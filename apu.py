@@ -8,11 +8,12 @@ import numba as nb
 from numba import jit
 from numba.experimental import jitclass
 from numba import uint8,uint16,uint32,int8,int32,float32
-from numba.typed import Dict
+from numba.typed import List,Dict
+from numba.types import ListType,DictType,unicode_type
 from numba import types
 
 from midiconstants import *
-
+from apu_i8l import RECTANGLE,TRIANGLE,NOISE,DPCM
 from mmu import MMU
 
 # Volume adjust
@@ -31,12 +32,16 @@ FME7_VOL	=0x130
 
 SMF_EVENT_CONTROL =0xB0
 
-
-CpuClock = 1789772.5
+'Dummy'
+APU_CLOCK = 1789772.5
 nRate	= 22050
-cycle_rate = int((CpuClock * 65536)/nRate)
-#print 'cycle_rate:',cycle_rate
+cycle_rate = int((APU_CLOCK * 65536)/nRate)
 
+' Volume shift'
+RECTANGLE_VOL_SHIFT=8
+TRIANGLE_VOL_SHIFT=9
+NOISE_VOL_SHIFT=8
+DPCM_VOL_SHIFT=8
 '''
 	//  0:Master
 	//  1:Rectangle 1
@@ -52,34 +57,46 @@ cycle_rate = int((CpuClock * 65536)/nRate)
 	// 11:FME7
 '''
 nVolumeChannel = 0x10
-#APU
-'''spec = [('tones',float32[:]),
-        ('volume',uint16[:]),
-        #('v',uint16[:]),
-        ('lastFrame',uint16[:]),
-        ('stopTones',uint8[:]),
-        ('ChannelWrite',uint8[:]),
-        ('SoundChannel',uint8[:]),
-        ('tonesBuffer',float32[:]),
-        ('frameBuffer',int32[:]),
-        #('SoundBuffer', np.dtype([('f0', 'u1'), ('f1', 'f4'), ('f2', 'u1')])[:]),
-        ('Frames',uint16),
-        ('Sound',uint8[:]),
-        ('doSound',uint8),
-        ('vlengths',uint8[:]),
-        ('pow2',int32[:])]'''
 
+'Lookup table used by nester.'
+#fillArray vlengths, 
+vbl_lengths = np.array([ 5, 127,  10,   1,  19,   2,  40,  3,
+                        80,   4,  30,   5,   7,   6,  13,  7,
+                         6,   8,  12,   9,  24,  10,  48, 11,
+                        96,  12,  36,  13,   8,  14,  16, 15],np.uint8)
 
+freq_limit = np.array([0x03FF, 0x0555, 0x0666, 0x071C, 0x0787, 0x07C1, 0x07E0, 0x07F0], np.uint16)
+
+duty_lut = np.array([2,  4,  8, 12], np.uint8)
+
+noise_freq = np.array([4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068], np.uint16)
+
+'DF: powers of 2'
+pow2 = np.array([2**i for i in range(31)] + [-2147483648],np.int32) #*(31) 
+
+dpcm_cycles = np.array([
+	428, 380, 340, 320, 286, 254, 226, 214,
+	190, 160, 142, 128, 106,  85,  72,  54],np.uint16)
+pulse_tone = np.zeros(0x800,np.uint16)
+t21to95 = ['0x07F0', '0x077C', '0x0710', '0x06AC', '0x064C', '0x05F2', '0x059E', '0x054C', '0x0501', '0x04B8', '0x0474', '0x0434', '0x03F8', '0x03BE', '0x0388', '0x0356', '0x0326', '0x02F9', '0x02CF', '0x02A6', '0x0280', '0x025C', '0x023A', '0x021A', '0x01FC', '0x01DF', '0x01C4', '0x01AB', '0x0193', '0x017C', '0x0167', '0x0153', '0x0140', '0x012E', '0x011D', '0x010D', '0x00FE', '0x00EF', '0x00E2', '0x00D5', '0x00C9', '0x00BE', '0x00B3', '0x00A9', '0x00A0', '0x0097', '0x008E', '0x0086', '0x007E', '0x0077', '0x0071', '0x006A', '0x0064', '0x005F', '0x0059', '0x0054', '0x0050', '0x004B', '0x0047', '0x0043', '0x003F', '0x003B', '0x0038', '0x0035', '0x0032', '0x002F', '0x002C', '0x002A', '0x0028', '0x0026', '0x0024', '0x0022', '0x0020', '0x001E', '0x001C']
+for t,freq in enumerate(t21to95):
+    pulse_tone[eval(freq)] = t + 21
 @jitclass()
 class APU(object):
     MMU:MMU
-    
+    ch0:RECTANGLE
+    ch1:RECTANGLE
+    ch2:TRIANGLE
+    ch3:NOISE
+    ch4:DPCM
     tones:float32[:]
     volume:uint16[:]
     lastFrame:uint16[:]
     stopTones:uint8[:]
 
     ChannelStatus:uint8[:]
+    ChannelUpdate:uint8[:]
+    
     notes_on:uint8[:,::1]
     notes_off:uint8[:,::1]
 
@@ -88,11 +105,21 @@ class APU(object):
     doSound:uint8
 
     vlengths:uint8[:]
-    NoiseTP:uint16[:]
+    freq_limit:uint16[:]
+    duty_lut:uint16[:]
+    noise_freq:uint16[:]
+    
     pow2:int32[:]
+
     
     def __init__(self,MMU = MMU()):
         self.MMU = MMU
+        self.ch0 = RECTANGLE(self.MMU, 0)
+        self.ch1 = RECTANGLE(self.MMU, 1)
+        self.ch2 = TRIANGLE(self.MMU)
+        self.ch3 = NOISE(self.MMU)
+        self.ch4 = DPCM(self.MMU)
+        
         self.tones = np.zeros(nVolumeChannel,np.float32)
         self.volume = np.zeros(nVolumeChannel,np.uint16)
 
@@ -100,6 +127,7 @@ class APU(object):
         self.stopTones = np.zeros(nVolumeChannel,np.uint8)
 
         self.ChannelStatus = np.zeros(nVolumeChannel,np.uint8)
+        self.ChannelUpdate = np.zeros(nVolumeChannel,np.uint8)
 
         self.notes_on = np.zeros((nVolumeChannel,4),np.uint8)
         self.notes_off = np.zeros((nVolumeChannel,4),np.uint8)
@@ -108,12 +136,7 @@ class APU(object):
 
         self.doSound = 1
 
-        'Lookup table used by nester.'
-        #fillArray vlengths, 
-        self.vlengths = np.array([5, 127, 10, 1, 19, 2, 40, 3, 80, 4, 30, 5, 7, 6, 13, 7, 6, 8, 12, 9, 24, 10, 48, 11, 96, 12, 36, 13, 8, 14, 16, 15],np.uint8) # As Long
-        self.NoiseTP = np.array([4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068],np.uint16)
-        'DF: powers of 2'
-        self.pow2 = np.array([2**i for i in range(31)] + [-2147483648],np.int32) #*(31) #As Long
+        
 
 
 
@@ -143,23 +166,25 @@ class APU(object):
 
 
     
-    async def updateSounds(self,Frames):
+    def updateSounds(self):
         self.ChannelStatus = self.ChannelWrite[:]
         
-        self.set_FRAMES(Frames)
+        #self.set_FRAMES(Frames)
         
         if self.doSound :
             #print 'playing'
             self.ReallyStopTones()
-            self.PlayRect(0)
-            self.PlayRect(1)
-            self.PlayTriangle(2)
-            self.PlayNoise(3)
+            self.PlayRect(self.ch0)
+            self.PlayRect(self.ch1)
+            self.PlayTriangle(self.ch2)
+            self.PlayNoise(self.ch3)
+            #self.PlayDMC()
         else:
             self.stopTone(0)
             self.stopTone(1)
             self.stopTone(2)
             self.stopTone(3)
+            self.stopTone(4)
             self.ReallyStopTones()
             
 
@@ -191,53 +216,136 @@ class APU(object):
 
 
     def ReallyStopTones(self):
-        for channel in range(4):
+        for channel in range(nVolumeChannel):
             if self.stopTones[channel] !=0 and self.stopTones[channel] != self.tones[channel]:
                 self.ToneOff(channel, self.stopTones[channel])
                 self.stopTones[channel] = 0
             #self.stopTone(channel)
+
+    def WriteRect(self,ch):
+        if self.ChannelWrite[ch.no]:
+            'addr 0'
+            ch.holdnote     = ch.reg[0] & 0x20
+            ch.env_fixed    = ch.reg[0] & 0x10
+            ch.volume       = ch.reg[0] & 0x0F if ch.env_fixed else 8
+            #ch.volume <<= 3
+            ch.env_decay    = (ch.reg[0] & 0x0F) +1
+            ch.duty         = duty_lut[ch.reg[0]>>6]
+
+            'addr 1'
+            ch.swp_on = ch.reg[1] & 0x80
+            ch.swp_inc = ch.reg[1] & 0x8
+            ch.swp_shift = ch.reg[1] & 0x7
+            ch.swp_decay = ((ch.reg[1]>>4)&0x07)+1
+            ch.swp_count = 0
+            ch.freqlimit = freq_limit[ch.swp_shift]
+            
+            'addr 2'
+            ch.freq = ch.reg[2] + (ch.freq&~0xFF)
+
+            'addr 3'
+            ch.freq = ((ch.reg[3]&0x7) << 8) + (ch.freq&0xFF)# + 1
+            ch.len_count = vbl_lengths[ch.reg[3] >> 3]# * 2
+            self.ChannelUpdate[ch.no] = 1
+
+    def UpdateRect(self, ch):
+        #The sweep unit continuously calculates each pulse channel's target period
+        if ch.swp_on and ch.swp_shift:
+            if ch.swp_count:
+                ch.swp_count -= 1
+            if ch.swp_count == 0:
+                ch.swp_count = (ch.swp_decay + 1)//2 #The divider's period is P + 1 half-frames 
+                if ch.swp_inc:
+                    ch.freq -= (ch.freq >> ch.swp_shift)
+                else:
+                    ch.freq += (ch.freq >> ch.swp_shift)
+                self.ChannelUpdate[ch.no] = 1
             
     def PlayRect(self,ch):
-        volume = (self.Sound[ch * 4 + 0] & 15) 
-        frequency = self.Sound[ch * 4 + 2]  + (self.Sound[ch * 4 + 3] & 7) * 256 + 1
-        self.playfun(ch, frequency, volume)
-   
-    
-    def PlayTriangle(self,ch):
-        volume = 9 #'triangle'
-        frequency = self.Sound[ch * 4 + 2]  + (self.Sound[ch * 4 + 3] & 7) * 256 + 1
-        self.playfun(ch, frequency * 2, volume)
-
-    def PlayNoise(self,ch):
-        volume = 6 #'Noise'
-        frequency = self.NoiseTP[(self.Sound[ch * 4 + 2] & 0xF)]
-        self.playfun(ch, frequency, volume)
-
-            
-    def playfun(self, ch, frequency, volume):
-        if self.SoundCtrl(ch) :
-            #volume = v #'Get volume'
-            length = self.vlengths[self.Sound[ch * 4 + 3] >> 3]#'Get length'
-            if volume > 0 :
-                if frequency > 1 :
-                    if self.ChannelWrite[ch] : #Ensures that a note doesn't replay unless memory written
-                        self.ChannelWrite[ch] = 0
-                        self.lastFrame[ch] = self.Frames + length
-                        self.playTone(ch, getTone(frequency), volume )
-                    
+        self.WriteRect(ch)
+        #ch.nowvolume = ch.volume
+        self.UpdateRect(ch)
+        self.RenderRect(ch)
+        ch.len_count -= 0 if ch.holdnote else 1
+        
+    def RenderRect(self,ch):
+        no = ch.no
+        if ch.len_count == 0: 
+            self.stopTone(no)
+        if self.SoundCtrl(no):
+            if ch.volume > 0 :
+                if ch.freq > 1 :
+                    if self.ChannelWrite[no] or self.ChannelUpdate[no]:
+                        #Ensures that a note doesn't replay unless memory written
+                        self.ChannelWrite[no] = 0
+                        self.ChannelUpdate[no] = 0
+                        self.playTone(no, self.getTone(ch.freq), ch.volume )
                 else:
-                    self.stopTone(ch)
+                    self.stopTone(no)
+            else:
+                self.stopTone(no)
+        else:
+            self.ChannelWrite[no] = 1
+            self.stopTone(no)
+
+        
+    
+    def PlayTriangle(self,ch2):
+        ch2.holdnote     = ch2.reg[0] & 0x80
+
+        'addr 2'
+        #ch.freq = (ch.freq&0xFFFF00) + ch.reg[2]
+
+        'addr 3'
+        ch2.freq = (((ch2.reg[3]&0x7) << 8) + (ch2.reg[2]) + 1) << 1
+        ch2.len_count = vbl_lengths[ch2.reg[3] >> 3]# * 2
+        ch2.counter_start = 0x80
+        
+        ch2.nowvolume = 9 #'triangle'
+        #frequency = self.Sound[2 * 4 + 2]  + (self.Sound[2 * 4 + 3] & 7) * 256 + 1
+        #length = vbl_lengths[self.Sound[2 * 4 + 3] >> 3]#'Get length'
+        self.playfun(ch2)
+        #self.playfun(2, frequency * 2, volume, length)
+
+    def PlayNoise(self,ch3):
+        #ch = self.ch3
+        ch3.holdnote     = ch3.reg[0] & 0x20
+
+        ch3.freq = noise_freq[ch3.reg[2] & 0xF]
+        ch3.len_count = vbl_lengths[ch3.reg[3] >> 3]# * 2
+        
+        ch3.nowvolume = 8 * 8 #'Noise'
+        self.playfun(ch3)
+
+        #frequency = self.APU_TO_FIXED(noise_freq[(self.Sound[ch * 4 + 2] & 0xF)])
+        #length = vbl_lengths[self.Sound[ch * 4 + 3] >> 3]#'Get length'
+        #self.playfun(ch, frequency, volume, length)
+
+    def PlayDMC(self):
+        frequency =self.APU_TO_FIXED(dpcm_cycles[(self.Sound[0x10] & 0xF)])
+            
+    def playfun(self, ch):
+        no = ch.no
+        if self.SoundCtrl(no) :
+            if ch.nowvolume > 0 :
+                if ch.freq > 1 :
+                    if self.ChannelWrite[no] : #Ensures that a note doesn't replay unless memory written
+                        self.ChannelWrite[no] = 0
+                        self.lastFrame[no] = ch.len_count #self.Frames + length
+                        self.playTone(no, self.getTone(ch.freq), ch.nowvolume )
+                else:
+                    self.stopTone(no)
                 
             else:
-                self.stopTone(ch)
+                self.stopTone(no)
             
         else:
-            self.ChannelWrite[ch] = 1
-            self.stopTone(ch)
+            self.ChannelWrite[no] = 1
+            self.stopTone(no)
 
-        if self.Frames >= self.lastFrame[ch]:
-            self.stopTone(ch)
-
+        if self.lastFrame[no] == 0: #self.Frames >= self.lastFrame[ch]:
+            self.stopTone(no)
+        self.lastFrame[no] -= 0 if ch.holdnote else 1
         
     
 
@@ -266,10 +374,22 @@ class APU(object):
             #midiout.send_message(note_off)
 
 
+    def getRectTone(self, freq): #As Long
+        if freq < 8:
+            return 0
+        if pulse_tone[freq]:
+            return pulse_tone[freq]
 
+        f = 1789772.5/(16.0 * (freq + 1))
+        t = np.log2(f/440.0) * 12.0 + 69.0
+        
+        if t < 0:t = 0 
+        if t > 127:t = 127 
+
+        return int(t)
 
     def getTone(self, freq): #As Long
-        if freq <= 0:
+        if freq < 8:
             return 0
         
         #freq = 65536 / freq
@@ -286,6 +406,11 @@ class APU(object):
     def playtest(self,mididev):
         pass
 
+    def APU_TO_FIXED(self,x):
+        return x<<16
+
+      
+
 #'Calculates a midi tone given an nes frequency.
 @jit(uint8(uint16),nopython=True)
 def getTone(freq): 
@@ -294,7 +419,7 @@ def getTone(freq):
         
         #freq = 65536 / freq
         #freq = 111861 / (freq + 1)
-        f = 1789772.5/(16.0 * (freq + 1))
+        f = (1789772.5/(16.0 * (freq + 1)))
         #t = math.log(freq / 8.176) * 17.31236   # 1 / math.log(1.059463) = 17.31236
         
         t = np.log2(f/440.0) * 12.0 + 69.0
@@ -465,13 +590,19 @@ def initMidi():
 
     midiout.send_message([0xC0,80]) #'Square wave'
     midiout.send_message([0xC1,80]) #'Square wave'
-    midiout.send_message([0xC2,43]) #Triangle wave
+    midiout.send_message([0xC2,81]) #Triangle wave
     midiout.send_message([0xC3,127]) #Noise. Used gunshot. Poor but sometimes works.'
+
+    #midiout.send_message([0xB0,100]) #'Square wave'
+    #midiout.send_message([0xB1,100]) #'Square wave'
+    #midiout.send_message([0xB2,100]) #Triangle wave
+    #midiout.send_message([0xB3,100]) #Noise. Used gunshot. Poor but sometimes works.'
+
     #return midiout
 
 def updateSounds(f):
     global apu
-    apu.updateSounds(f)
+    apu.updateSounds()
     
 def playmidi(APU):
     for ch in range(4):
@@ -504,41 +635,134 @@ async def playfile(sf):
         while time.time()-t<0.016:
             pass
 
+def loadfile(fn):
+    f = bytearray(np.memmap(fn,dtype=np.uint8, mode = 'r')).decode('utf8').split('\n')
+    return f
+
+
+
 def stopmidi():
     midiout.send_message([0x80, 60, 0])
     midiout.send_message([0x81, 60, 0])
     midiout.send_message([0x82, 60, 0])
     midiout.send_message([0x83, 60, 0])
 
+
+def GetFreq(channel):
+    freq = 0
+    if channel in (0,1):
+        pass
+        
+    
 if __name__ == '__main__':
     print(getTone(300))
-    apu = APU()
     
-    #apu.pAPUinit()
+    
     initMidi()
-    note_on = [0x93, 60, 112] # channel 1, middle C, velocity 112
-    note_off = [0x83, 60, 0]
+    #note_on = [0x93, 60, 112] # channel 1, middle C, velocity 112
+    #note_off = [0x83, 60, 0]
     #apu.midiout.send_message([192,127])
     #midiout.send_message(note_on)
-    time.sleep(0.5)
-    midiout.send_message([0x90, 60, 30])
-    time.sleep(0.5)
-    midiout.send_message([0x80, 60, 0])
-    time.sleep(0.5)
-    midiout.send_message([0x90, 60, 100])
-    time.sleep(0.5)
-    midiout.send_message([0x80, 60, 0])
-    time.sleep(0.5)
-    notes = np.zeros((12,3),np.uint8)
-    note_on = np.array([0x93, 60, 112],np.uint8) # channel 1, middle C, velocity 112
-    notes[3] = [0x93, 60, 112]
-    note_off = np.array([0x83, 60, 0],np.uint8)
-    midiout.send_message(notes[3])
-    time.sleep(0.5)
-
+    #time.sleep(0.5)
+    #midiout.send_message([0x90, 60, 8])
+    #time.sleep(3)
+    #c
+    #time.sleep(0.5)
+    #midiout.send_message([0x90, 60, 100])
+    #time.sleep(3)
+    #midiout.send_message([0x80, 60, 0])
+    #time.sleep(0.5)
+    def sweepD(swp,length):
+        s = length / swp
+        for v in range(swp):
+            midiout.send_message([0x90, 100 - v, 120])
+            time.sleep(s)
+            #midiout.send_message([0x90, 60 - v - 1, 80])
+            midiout.send_message([0x80, 100 - v, 0])
+        #midiout.send_message([0x80, 60 - swp, 0])
+    def sweepU(swp,length):
+        s = length / swp
+        for v in range(swp):
+            midiout.send_message([0x90, 20 + v, 120])
+            time.sleep(s)
+            #midiout.send_message([0x90, 60 - v - 1, 80])
+            midiout.send_message([0x80, 20 + v, 0])
+        #midiout.send_message([0x80, 60 - swp, 0])
+    sweepD(80,1)
+    time.sleep(1)
+    sweepD(80,2)
+    time.sleep(1)
+    sweepU(80,1)
+    time.sleep(1)
+    sweepU(80,0.2)
+    time.sleep(1)
+    #notes = np.zeros((12,3),np.uint8)
+    #note_on = np.array([0x93, 60, 112],np.uint8) # channel 1, middle C, velocity 112
+    #notes[3] = [0x93, 60, 112]
+    #note_off = np.array([0x83, 60, 0],np.uint8)
+    #midiout.send_message(notes[3])
+    #time.sleep(0.5)
+    apu = APU()
     import asyncio
     asyncio.run(playfile('sounddata.txt'))
+
+    import pyglet
     
+    s = loadfile('sounddata.txt')
+    player = pyglet.media.Player()
+    player.loop = True
+    def my_playlist():
+        length = 0
+        for i,fsound in enumerate(loadfile('sounddata.txt')):
+            print(i)
+            if length:
+                length -= 1
+                continue
+            sdata = [int(i) for i in fsound.split(';')[1].split(',')]
+            f = uint32(fsound.split(';')[0])
+            cw = [int(i) for i in fsound.split(';')[2].split(',')]
 
+            freq = sdata[0 * 4 + 2]  + (sdata[0 * 4 + 3] & 7) * 256
+            frequency = uint16(freq) + 1#uint32(1789772.5/(16.0 * (freq + 1)))
+            length = vbl_lengths[sdata[0 * 4 + 3] >> 3]
+            Square1 = pyglet.media.synthesis.Square(length * 0.016, frequency=frequency, sample_rate=44100)
+            
+            yield Square1
+            #player.queue(Square1)
+            #while time.time()-t<0.016:
+                #pass
+    #plist = my_playlist
+    #player.queue(my_playlist())
+    #player.play()
+    ###pyglet.app.run()
+    #player.queue(pyglet.media.synthesis.Square(3.0, frequency=440, sample_rate=44800))
+    #my_playlist()
+    #pyglet.options['audio'] = ('xaudio2', 'directsound', 'openal', 'pulse', 'silent')
+    #Square = pyglet.media.synthesis.Square(1.0, frequency=440, sample_rate=44100)
+    #Triangle = pyglet.media.synthesis.Triangle(3.0, frequency=440, sample_rate=44800)
+    #Square.play()
+    #Triangle.play()
+    
+    length = 0
+    for  i,fsound in enumerate(loadfile('sounddata.txt')):
+        #print(i)
+        if length:
+            length -= 1
+            continue
+        t=time.time()
+        sdata = [int(i) for i in fsound.split(';')[1].split(',')]
+        f = uint32(fsound.split(';')[0])
+        cw = [int(i) for i in fsound.split(';')[2].split(',')]
 
+        freq = sdata[0 * 4 + 2]  + (sdata[0 * 4 + 3] & 7) * 256
+        frequency = uint16(freq) + 1#uint32(1789772.5/(16.0 * (freq + 1)))
+        length = vbl_lengths[sdata[0 * 4 + 3] >> 3]
+        #print(frequency)
+        Square1 = pyglet.media.synthesis.Square(0.016 * length, frequency=frequency, sample_rate=44100)
         
+        #player.queue(Square1)
+        Square1.play()
+        while time.time() - t < 0.016 * length:
+            pass
+    #player.play()
+    #pyglet.app.run()
