@@ -107,13 +107,13 @@ class TRIANGLE:
     dummy0:uint8
 
     'for render'
-    phaseacc:uint32
-    freq:uint32
-    lin_count:uint32
-    len_count:uint32
-    adder:uint32
+    phaseacc:int32
+    freq:int32
+    lin_count:int32
+    len_count:int32
+    adder:int32
     
-    nowvolume:uint32
+    nowvolume:int32
 
 
     'for sync'
@@ -221,27 +221,30 @@ class NOISE:
 
 @jitclass
 class DPCM:
+    no: uint8
     reg:uint8[:]
     
     enable:uint8
     looping:uint8
     cur_byte:uint8
-    dpcm_value:uint32
+    dpcm_value:uint8
 
     'for render'
-    phaseacc:uint32
-    freq:uint32
-    output:uint32
+    phaseacc:int32
+    freq:int32
+    output:int32
+    nowvolume:int32
 
-
-    address:uint16
-    cache_addr:uint16
-    dmalength:uint32
-    cache_dmalength:uint8
-    dpcm_output_real:uint32
-    dpcm_output_fake:uint32
-    dpcm_output_old:uint32
-    dpcm_output_offset:uint32
+    len_count:uint32
+    
+    address:    uint16
+    cache_addr: uint16
+    dmalength:          int32
+    cache_dmalength:    int32
+    dpcm_output_real:   int32
+    dpcm_output_fake:   int32
+    dpcm_output_old:    int32
+    dpcm_output_offset: int32
 
     'for sync'
     sync_reg:uint8[:]
@@ -249,12 +252,14 @@ class DPCM:
     sync_looping:uint8
     sync_irq_gen:uint8
     sync_irq_enable:uint8
-    sync_cycles:uint32
-    sync_cache_cycles:uint32
-    sync_dmalength:uint32
-    sync_cache_dmalength:uint32
+    sync_cycles:        int32
+    sync_cache_cycles:  int32
+    sync_dmalength:     int32
+    sync_cache_dmalength:int32
     
     def __init__(dpcm,MMU):
+        dpcm.no = 3
+        
         dpcm.reg = MMU.RAM[2][0xC: 0x10]
         
         dpcm.enable = 0
@@ -267,7 +272,9 @@ class DPCM:
         dpcm.phaseacc = 0
         dpcm.freq = 0
         dpcm.output = 0
+        dpcm.nowvolume = 0
 
+        dpcm.len_count = 0
         
         dpcm.address = 0
         dpcm.cache_addr = 0
@@ -289,6 +296,9 @@ class DPCM:
         dpcm.sync_dmalength = 0
         dpcm.sync_cache_dmalength = 0
 
+    @property
+    def holdnote(dpcm):
+        return dpcm.looping
         
 if __name__ == '__main__':
     pass

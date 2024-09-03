@@ -77,6 +77,7 @@ pow2 = np.array([2**i for i in range(31)] + [-2147483648],np.int32) #*(31)
 dpcm_cycles = np.array([
 	428, 380, 340, 320, 286, 254, 226, 214,
 	190, 160, 142, 128, 106,  85,  72,  54],np.uint16)
+
 pulse_tone = np.zeros(0x800,np.uint16)
 t21to95 = ['0x07F0', '0x077C', '0x0710', '0x06AC', '0x064C', '0x05F2', '0x059E', '0x054C', '0x0501', '0x04B8', '0x0474', '0x0434', '0x03F8', '0x03BE', '0x0388', '0x0356', '0x0326', '0x02F9', '0x02CF', '0x02A6', '0x0280', '0x025C', '0x023A', '0x021A', '0x01FC', '0x01DF', '0x01C4', '0x01AB', '0x0193', '0x017C', '0x0167', '0x0153', '0x0140', '0x012E', '0x011D', '0x010D', '0x00FE', '0x00EF', '0x00E2', '0x00D5', '0x00C9', '0x00BE', '0x00B3', '0x00A9', '0x00A0', '0x0097', '0x008E', '0x0086', '0x007E', '0x0077', '0x0071', '0x006A', '0x0064', '0x005F', '0x0059', '0x0054', '0x0050', '0x004B', '0x0047', '0x0043', '0x003F', '0x003B', '0x0038', '0x0035', '0x0032', '0x002F', '0x002C', '0x002A', '0x0028', '0x0026', '0x0024', '0x0022', '0x0020', '0x001E', '0x001C']
 for t,freq in enumerate(t21to95):
@@ -150,7 +151,12 @@ class APU(object):
     #@property
     def SoundCtrl(self,ch):
         return self.Sound[0x15] & (1 << ch)
-   
+    
+    @property
+    def Reg4015(self):
+        temp = self.MMU.SoundWrite[0x15]
+        self.MMU.SoundWrite[0x15] = 0
+        return temp
 
 
     def SoundChannel_ZERO(self,ch):
@@ -164,7 +170,32 @@ class APU(object):
     def set_FRAMES(self,frame):
         self.Frames  = frame
 
-
+    def updateReg4015(self):
+        if self.Reg4015 == 0:
+            return
+        if(not(self.SoundCtrl(0)) ):
+            self.ch0.enable    = 0
+            self.ch0.len_count = 0
+        if(not(self.SoundCtrl(1)) ):
+            self.ch1.enable    = 0
+            self.ch1.len_count = 0
+        if(not(self.SoundCtrl(2)) ):
+            self.ch2.enable    = 0
+            self.ch2.len_count = 0
+            self.ch2.lin_count = 0
+            self.ch2.counter_start = 0
+        if(not(self.SoundCtrl(3)) ):
+            self.ch3.enable    = 0
+            self.ch3.len_count = 0
+        if(not(self.SoundCtrl(4)) ):
+            self.ch4.enable    = 0
+            self.ch4.dmalength = 0
+        else:
+            self.ch4.enable = 0xFF
+            if( not self.ch4.dmalength ):
+                self.ch4.address   = self.ch4.cache_addr
+                self.ch4.dmalength = self.ch4.cache_dmalength
+                self.ch4.phaseacc  = 0
     
     def updateSounds(self):
         self.ChannelStatus = self.ChannelWrite[:]
@@ -174,11 +205,13 @@ class APU(object):
         if self.doSound :
             #print 'playing'
             self.ReallyStopTones()
+            self.updateReg4015()
+            self.PlayDMC(self.ch4)
             self.PlayRect(self.ch0)
             self.PlayRect(self.ch1)
             self.PlayTriangle(self.ch2)
             self.PlayNoise(self.ch3)
-            #self.PlayDMC()
+            
         else:
             self.stopTone(0)
             self.stopTone(1)
@@ -190,7 +223,7 @@ class APU(object):
 
     
     def playTone(self,channel, tone, v):
-        if tone != self.tones[channel] or v < self.volume[channel] - 3 or v > self.volume[channel] or v == 0 :
+        if tone != self.tones[channel]  or v == 0 or v < self.volume[channel] - 3 or v > self.volume[channel]:
             if self.tones[channel] != 0:
                 self.ToneOff(channel, self.tones[channel])
                 self.tones[channel] = 0
@@ -288,45 +321,138 @@ class APU(object):
             self.ChannelWrite[no] = 1
             self.stopTone(no)
 
+    def WriteTriangle(self,ch2):
+        if self.ChannelWrite[ch2.no]:
+            ch2.holdnote     = ch2.reg[0] & 0x80
+            'addr 2'
+            #ch.freq = (ch.freq&0xFFFF00) + ch.reg[2]
+
+            'addr 3'
+            ch2.freq = (((ch2.reg[3]&0x7) << 8) + (ch2.reg[2]) + 1) << 1
+            ch2.len_count = vbl_lengths[ch2.reg[3] >> 3]# * 2
+            ch2.counter_start = 0x80
         
+            ch2.nowvolume = 9 #'triangle'
+            
+    def UpdateTriangle(self, ch2):
+        if ch2.counter_start:
+            ch2.lin_count = ch2.reg[0] & 0x7F
+        elif ch2.lin_count:
+            ch2.lin_count -= 1
+        if (not ch2.holdnote) and ch2.lin_count:
+            ch2.counter_start = 0
+
+
     
     def PlayTriangle(self,ch2):
-        ch2.holdnote     = ch2.reg[0] & 0x80
-
-        'addr 2'
-        #ch.freq = (ch.freq&0xFFFF00) + ch.reg[2]
-
-        'addr 3'
-        ch2.freq = (((ch2.reg[3]&0x7) << 8) + (ch2.reg[2]) + 1) << 1
-        ch2.len_count = vbl_lengths[ch2.reg[3] >> 3]# * 2
-        ch2.counter_start = 0x80
-        
-        ch2.nowvolume = 9 #'triangle'
-        #frequency = self.Sound[2 * 4 + 2]  + (self.Sound[2 * 4 + 3] & 7) * 256 + 1
-        #length = vbl_lengths[self.Sound[2 * 4 + 3] >> 3]#'Get length'
+        self.WriteTriangle(ch2)
+        self.UpdateTriangle(ch2)
+        self.RenderTriangle(ch2)
         self.playfun(ch2)
         #self.playfun(2, frequency * 2, volume, length)
+        ch2.len_count -= 0 if ch2.holdnote else 1
+        if ch2.lin_count <= 0:
+            ch2.len_count = 0
 
+    def RenderTriangle(self,ch2):
+        ch2.phaseacc -= cycle_rate
+        if ch2.phaseacc >= 0:
+            #ch2.nowvolume 100%
+            return
+        if ch2.freq > cycle_rate:
+            ch2.phaseacc += ch2.freq
+            ch2.adder += (ch2.adder+1)&0x1F
+            if( ch2.adder < 0x10 ):
+                ch2.nowvolume = (ch2.adder&0x0F)#<<TRIANGLE_VOL_SHIFT
+            else:
+                ch2.nowvolume = (0x0F-(ch2.adder&0x0F))#<<TRIANGLE_VOL_SHIFT
+            return
+        num_times = total = 0
+        while( ch2.phaseacc < 0  and ch2.freq > 0):
+            ch2.phaseacc += ch2.freq
+            ch2.adder = (ch2.adder+1)&0x1F
+            if( ch2.adder < 0x10 ):
+                ch2.nowvolume = (ch2.adder&0x0F)#<<TRIANGLE_VOL_SHIFT
+            else:
+                ch2.nowvolume = (0x0F-(ch2.adder&0x0F))#<<TRIANGLE_VOL_SHIFT
+            total += ch2.nowvolume
+            num_times += 1
+        ch2.nowvolume = int(total/num_times) if num_times > 0 else total
+        return 
+        
     def PlayNoise(self,ch3):
         #ch = self.ch3
-        ch3.holdnote     = ch3.reg[0] & 0x20
+        ch3.holdnote    = ch3.reg[0]&0x20
+        ch3.volume      = ch3.reg[0]&0x0F
+        ch3.env_fixed   = ch3.reg[0]&0x10
+        ch3.env_decay   = (ch3.reg[0]&0x0F)+1
 
         ch3.freq = noise_freq[ch3.reg[2] & 0xF]
-        ch3.len_count = vbl_lengths[ch3.reg[3] >> 3]# * 2
+        ch3.xor_tap = 0x40 if ch3.reg[2]&0x80 else 0x02
         
-        ch3.nowvolume = 8 * 8 #'Noise'
+        ch3.len_count = vbl_lengths[ch3.reg[3] >> 3]# * 2
+        ch3.env_count = ch3.env_decay+1
+                               
+        ch3.nowvolume = ch3.volume #8 * 8 #'Noise'
         self.playfun(ch3)
+    
 
-        #frequency = self.APU_TO_FIXED(noise_freq[(self.Sound[ch * 4 + 2] & 0xF)])
-        #length = vbl_lengths[self.Sound[ch * 4 + 3] >> 3]#'Get length'
-        #self.playfun(ch, frequency, volume, length)
+    def PlayDMC(self, ch4):
+        ch4.freq = APU_CLOCK // dpcm_cycles[(ch4.reg[0] & 0xF)]
+        ch4.looping = ch4.reg[0]&0x40
 
-    def PlayDMC(self):
-        frequency =self.APU_TO_FIXED(dpcm_cycles[(self.Sound[0x10] & 0xF)])
-            
+        ch4.dpcm_value = (ch4.reg[1]&0x7F)>>1
+
+        'Sample address = %11AAAAAA.AA000000 = $C000 + (A * 64)'
+        ch4.cache_addr = 0xC000+(ch4.reg[2]<<6)
+
+        'Sample length = %LLLL.LLLL0001 = (L * 16) + 1 bytes'
+        ch4.cache_dmalength = ((ch4.reg[3]<<4)+1)#<<3
+
+        ch4.len_count = 1
+        
+        self.RenderDMC(ch4)
+        ch4.nowvolume = ch4.output
+        
+        self.playfun(ch4)
+
+    def RenderDMC(self,ch4):
+        if ch4.dmalength:
+            ch4.phaseacc -= cycle_rate
+
+            while ch4.phaseacc < 0:
+                ch4.phaseacc += ch4.freq
+                if( not (ch4.dmalength&7) ):
+                    ch4.cur_byte = self.MMU.read( ch4.address )
+                    if( 0xFFFF == ch4.address ):
+                        ch4.address = 0x8000
+                    else:
+                        ch4.address += 1
+                ch4.dmalength -= 1
+                if ch4.dmalength == 0:
+                    ch4.enable = 0
+                    break
+
+                if( ch4.cur_byte&(1<<((ch4.dmalength&7)^7)) ):
+                    if ( ch4.dpcm_value < 0x3F ):
+                        ch4.dpcm_value += 1
+                else:
+                    if ( ch4.dpcm_value >1 ):
+                        ch4.dpcm_value -= 1
+        ch4.dpcm_output_real = int((ch4.reg[1]&0x01)+ch4.dpcm_value*2)-0x40
+        if( abs(ch4.dpcm_output_real-ch4.dpcm_output_fake) <= 8 ):
+            ch4.dpcm_output_fake = ch4.dpcm_output_real
+            ch4.output = int(ch4.dpcm_output_real)#<<DPCM_VOL_SHIFT
+        else:
+            if( ch4.dpcm_output_real > ch4.dpcm_output_fake ):
+                ch4.dpcm_output_fake += 8
+            else:
+                ch4.dpcm_output_fake -= 8
+            ch4.output = int(ch4.dpcm_output_fake)#<<DPCM_VOL_SHIFT
+                
     def playfun(self, ch):
         no = ch.no
-        if self.SoundCtrl(no) :
+        if self.SoundCtrl(no)  or ch.enable:
             if ch.nowvolume > 0 :
                 if ch.freq > 1 :
                     if self.ChannelWrite[no] : #Ensures that a note doesn't replay unless memory written
@@ -409,6 +535,15 @@ class APU(object):
     def APU_TO_FIXED(self,x):
         return x<<16
 
+
+def SaveSounds(APU):
+        #self.SoundData.append('%d,%s' %(self.CPU.Frames,','.join(self.APU.Sound[0:0x15]])))
+        with open('sounddata.txt','a') as f:
+            f.write('%d;%s' %(self.NES.CPU.Frames,','.join([str(i) for i in self.NES.APU.Sound])))
+            f.write(';%s' %(','.join([str(i) for i in self.NES.APU.ChannelStatus])))
+            f.write('\n')
+        #print()
+            
       
 
 #'Calculates a midi tone given an nes frequency.
@@ -590,8 +725,10 @@ def initMidi():
 
     midiout.send_message([0xC0,80]) #'Square wave'
     midiout.send_message([0xC1,80]) #'Square wave'
+    #midiout.send_message([0xC2,39]) #Triangle wave
     midiout.send_message([0xC2,81]) #Triangle wave
     midiout.send_message([0xC3,127]) #Noise. Used gunshot. Poor but sometimes works.'
+    midiout.send_message([0xC4,87]) #DPCM.'
 
     #midiout.send_message([0xB0,100]) #'Square wave'
     #midiout.send_message([0xB1,100]) #'Square wave'
@@ -605,7 +742,7 @@ def updateSounds(f):
     apu.updateSounds()
     
 def playmidi(APU):
-    for ch in range(4):
+    for ch in range(5):
         #print(apu.notes[note])
         if APU.notes_off[ch][0]:
             APU.notes_off[ch][0] = 0
@@ -688,12 +825,12 @@ if __name__ == '__main__':
             #midiout.send_message([0x90, 60 - v - 1, 80])
             midiout.send_message([0x80, 20 + v, 0])
         #midiout.send_message([0x80, 60 - swp, 0])
-    sweepD(80,1)
-    time.sleep(1)
-    sweepD(80,2)
-    time.sleep(1)
-    sweepU(80,1)
-    time.sleep(1)
+    #sweepD(80,1)
+    #time.sleep(1)
+    #sweepD(80,2)
+    #time.sleep(1)
+    #sweepU(80,1)
+    #time.sleep(1)
     sweepU(80,0.2)
     time.sleep(1)
     #notes = np.zeros((12,3),np.uint8)
@@ -761,7 +898,7 @@ if __name__ == '__main__':
         Square1 = pyglet.media.synthesis.Square(0.016 * length, frequency=frequency, sample_rate=44100)
         
         #player.queue(Square1)
-        Square1.play()
+        #Square1.play()
         while time.time() - t < 0.016 * length:
             pass
     #player.play()

@@ -185,6 +185,9 @@ class CPU6502(object):
     @property
     def ChannelWrite(self):
         return self.MMU.ChannelWrite
+    @property
+    def SoundWrite(self):
+        return self.MMU.SoundWrite
     
         
     @property
@@ -1123,7 +1126,8 @@ class CPU6502(object):
         
         if addr < 0x18:
             self.CPUREG[addr] = value
-        
+            self.SoundWrite[addr] = value
+            
         if addr == 0x15:
             #self.Sound[0x15] = value
             self.RAM[2][address & 0x1FFF] = value
