@@ -78,10 +78,10 @@ dpcm_cycles = np.array([
 	428, 380, 340, 320, 286, 254, 226, 214,
 	190, 160, 142, 128, 106,  85,  72,  54],np.uint16)
 
-pulse_tone = np.zeros(0x800,np.uint16)
-t21to95 = ['0x07F0', '0x077C', '0x0710', '0x06AC', '0x064C', '0x05F2', '0x059E', '0x054C', '0x0501', '0x04B8', '0x0474', '0x0434', '0x03F8', '0x03BE', '0x0388', '0x0356', '0x0326', '0x02F9', '0x02CF', '0x02A6', '0x0280', '0x025C', '0x023A', '0x021A', '0x01FC', '0x01DF', '0x01C4', '0x01AB', '0x0193', '0x017C', '0x0167', '0x0153', '0x0140', '0x012E', '0x011D', '0x010D', '0x00FE', '0x00EF', '0x00E2', '0x00D5', '0x00C9', '0x00BE', '0x00B3', '0x00A9', '0x00A0', '0x0097', '0x008E', '0x0086', '0x007E', '0x0077', '0x0071', '0x006A', '0x0064', '0x005F', '0x0059', '0x0054', '0x0050', '0x004B', '0x0047', '0x0043', '0x003F', '0x003B', '0x0038', '0x0035', '0x0032', '0x002F', '0x002C', '0x002A', '0x0028', '0x0026', '0x0024', '0x0022', '0x0020', '0x001E', '0x001C']
-for t,freq in enumerate(t21to95):
-    pulse_tone[eval(freq)] = t + 21
+#pulse_tone = np.zeros(0x800,np.uint16)
+#t21to95 = ['0x07F0', '0x077C', '0x0710', '0x06AC', '0x064C', '0x05F2', '0x059E', '0x054C', '0x0501', '0x04B8', '0x0474', '0x0434', '0x03F8', '0x03BE', '0x0388', '0x0356', '0x0326', '0x02F9', '0x02CF', '0x02A6', '0x0280', '0x025C', '0x023A', '0x021A', '0x01FC', '0x01DF', '0x01C4', '0x01AB', '0x0193', '0x017C', '0x0167', '0x0153', '0x0140', '0x012E', '0x011D', '0x010D', '0x00FE', '0x00EF', '0x00E2', '0x00D5', '0x00C9', '0x00BE', '0x00B3', '0x00A9', '0x00A0', '0x0097', '0x008E', '0x0086', '0x007E', '0x0077', '0x0071', '0x006A', '0x0064', '0x005F', '0x0059', '0x0054', '0x0050', '0x004B', '0x0047', '0x0043', '0x003F', '0x003B', '0x0038', '0x0035', '0x0032', '0x002F', '0x002C', '0x002A', '0x0028', '0x0026', '0x0024', '0x0022', '0x0020', '0x001E', '0x001C']
+#for t,freq in enumerate(t21to95):
+#    pulse_tone[eval(freq)] = t + 21
 @jitclass()
 class APU(object):
     MMU:MMU
@@ -138,8 +138,7 @@ class APU(object):
         self.doSound = 1
 
         
-
-
+        
 
     @property
     def Sound(self):
@@ -198,7 +197,7 @@ class APU(object):
                 self.ch4.phaseacc  = 0
     
     def updateSounds(self):
-        self.ChannelStatus = self.ChannelWrite[:]
+        self.ChannelStatus = self.ChannelWrite.copy()
         
         #self.set_FRAMES(Frames)
         
@@ -274,43 +273,53 @@ class APU(object):
             ch.freqlimit = freq_limit[ch.swp_shift]
             
             'addr 2'
-            ch.freq = ch.reg[2] + (ch.freq&~0xFF)
+            #ch.freq = ch.reg[2] + (ch.freq&~0xFF)
 
             'addr 3'
-            ch.freq = ((ch.reg[3]&0x7) << 8) + (ch.freq&0xFF)# + 1
-            ch.len_count = vbl_lengths[ch.reg[3] >> 3]# * 2
+            ch.freq = ((ch.reg[3]&0x7) << 8) + ch.reg[2] + 1#(ch.freq&0xFF)# + 1
+            ch.len_count = vbl_lengths[ch.reg[3] >> 3] * 2
             self.ChannelUpdate[ch.no] = 1
 
     def UpdateRect(self, ch):
+            
         #The sweep unit continuously calculates each pulse channel's target period
         if ch.swp_on and ch.swp_shift:
             if ch.swp_count:
                 ch.swp_count -= 1
             if ch.swp_count == 0:
-                ch.swp_count = (ch.swp_decay + 1)//2 #The divider's period is P + 1 half-frames 
+                ch.swp_count = ch.swp_decay#(ch.swp_decay + 1)//2 #The divider's period is P + 1 half-frames 
+                self.ChannelUpdate[ch.no] = 1
                 if ch.swp_inc:
-                    ch.freq -= (ch.freq >> ch.swp_shift)
+                    if ch.complement:
+                        ch.freq -= (ch.freq >> ch.swp_shift) #CH 1
+                    else:
+                        ch.freq += ~(ch.freq >> ch.swp_shift)#CH 0
                 else:
                     ch.freq += (ch.freq >> ch.swp_shift)
-                self.ChannelUpdate[ch.no] = 1
+                    if ch.freq > ch.freqlimit:
+                        self.ChannelUpdate[ch.no] = 0
+                
             
     def PlayRect(self,ch):
         self.WriteRect(ch)
         #ch.nowvolume = ch.volume
         self.UpdateRect(ch)
         self.RenderRect(ch)
-        ch.len_count -= 0 if ch.holdnote else 1
+        if ch.len_count and (not ch.holdnote):
+            ch.len_count -= 1
+        
         
     def RenderRect(self,ch):
         no = ch.no
-        if ch.len_count == 0: 
-            self.stopTone(no)
+        
         if self.SoundCtrl(no):
             if ch.volume > 0 :
-                if ch.freq > 1 :
-                    if self.ChannelWrite[no] or self.ChannelUpdate[no]:
+                if ch.freq > 1:# or ((ch.swp_inc) and ch.freq <= ch.freqlimit) :
+                    if self.ChannelWrite[no]:
                         #Ensures that a note doesn't replay unless memory written
                         self.ChannelWrite[no] = 0
+                        self.playTone(no, self.getTone(ch.freq), ch.volume )
+                    elif self.ChannelUpdate[no]:
                         self.ChannelUpdate[no] = 0
                         self.playTone(no, self.getTone(ch.freq), ch.volume )
                 else:
@@ -321,6 +330,10 @@ class APU(object):
             self.ChannelWrite[no] = 1
             self.stopTone(no)
 
+        if ch.len_count <= 0: 
+            self.stopTone(no)
+        
+
     def WriteTriangle(self,ch2):
         if self.ChannelWrite[ch2.no]:
             ch2.holdnote     = ch2.reg[0] & 0x80
@@ -328,7 +341,7 @@ class APU(object):
             #ch.freq = (ch.freq&0xFFFF00) + ch.reg[2]
 
             'addr 3'
-            ch2.freq = (((ch2.reg[3]&0x7) << 8) + (ch2.reg[2]) + 1) << 1
+            ch2.freq = (((ch2.reg[3]&0x7) << 8) + ch2.reg[2] + 1) << 1
             ch2.len_count = vbl_lengths[ch2.reg[3] >> 3]# * 2
             ch2.counter_start = 0x80
         
@@ -503,8 +516,8 @@ class APU(object):
     def getRectTone(self, freq): #As Long
         if freq < 8:
             return 0
-        if pulse_tone[freq]:
-            return pulse_tone[freq]
+        #if pulse_tone[freq]:
+        #    return pulse_tone[freq]
 
         f = 1789772.5/(16.0 * (freq + 1))
         t = np.log2(f/440.0) * 12.0 + 69.0
@@ -564,138 +577,7 @@ def getTone(freq):
         return t
 
 
-'''
-MIDI instrument list. Ripped off some website I've forgotten which
 
-0=Acoustic Grand Piano
-1=Bright Acoustic Piano
-2=Electric Grand Piano
-3=Honky-tonk Piano
-4=Rhodes Piano
-5=Chorus Piano
-6=Harpsi -chord
-7=Clavinet
-8=Celesta
-9=Glocken -spiel
-10=Music Box
-11=Vibra -phone
-12=Marimba
-13=Xylo-phone
-14=Tubular Bells
-15=Dulcimer
-16=Hammond Organ
-17=Percuss. Organ
-18=Rock Organ
-19=Church Organ
-20=Reed Organ
-21=Accordion
-22=Harmonica
-23=Tango Accordion
-24=Acoustic Guitar (nylon)
-25=Acoustic Guitar (steel)
-26=Electric Guitar (jazz)
-27=Electric Guitar (clean)
-28=Electric Guitar (muted)
-29=Overdriven Guitar
-30=Distortion Guitar
-31=Guitar Harmonics
-32=Acoustic Bass
-33=Electric Bass (finger)
-34=Electric Bass (pick)
-35=Fretless Bass
-36=Slap Bass 1
-37=Slap Bass 2
-38=Synth Bass 1
-39=Synth Bass 2
-40=Violin
-41=Viola
-42=Cello
-43=Contra Bass
-44=Tremolo Strings
-45=Pizzicato Strings
-46=Orchestral Harp
-47=Timpani
-48=String Ensemble 1
-49=String Ensemble 2
-50=Synth Strings 1
-51=Synth Strings 2
-52=Choir Aahs
-53=Voice Oohs
-54=Synth Voice
-55=Orchestra Hit
-56=Trumpet
-57=Trombone
-58=Tuba
-59=Muted Trumpet
-60=French Horn
-61=Brass Section
-62=Synth Brass 1
-63=Synth Brass 2
-64=Soprano Sax
-65=Alto Sax
-66=Tenor Sax
-67=Baritone Sax
-68=Oboe
-69=English Horn
-70=Bassoon
-71=Clarinet
-72=Piccolo
-73=Flute
-74=Recorder
-75=Pan Flute
-76=Bottle Blow
-77=Shaku
-78=Whistle
-79=Ocarina
-80=Lead 1 (square)
-81=Lead 2 (saw tooth)
-82=Lead 3 (calliope lead)
-83=Lead 4 (chiff lead)
-84=Lead 5 (charang)
-85=Lead 6 (voice)
-86=Lead 7 (fifths)
-87=Lead 8 (bass + lead)
-88=Pad 1 (new age)
-89=Pad 2 (warm)
-90=Pad 3 (poly synth)
-91=Pad 4 (choir)
-92=Pad 5 (bowed)
-93=Pad 6 (metallic)
-94=Pad 7 (halo)
-95=Pad 8 (sweep)
-96=FX 1 (rain)
-97=FX 2 (sound track)
-98=FX 3 (crystal)
-99=FX 4 (atmo - sphere)
-100=FX 5 (bright)
-101=FX 6 (goblins)
-102=FX 7 (echoes)
-103=FX 8 (sci-fi)
-104=Sitar
-105=Banjo
-106=Shamisen
-107=Koto
-108=Kalimba
-109=Bagpipe
-110=Fiddle
-111=Shanai
-112=Tinkle Bell
-113=Agogo
-114=Steel Drums
-115=Wood block
-116=Taiko Drum
-117=Melodic Tom
-118=Synth Drum
-119=Reverse Cymbal
-120=Guitar Fret Noise
-121=Breath Noise
-122=Seashore
-123=Bird Tweet
-124=Telephone Ring
-125=Helicopter
-126=Applause
-127=Gunshot
-'''
 def play_note(note, length, track, base_num=0, delay=0, velocity=1.0, channel=0):
 
     bpm = 125
@@ -730,14 +612,8 @@ def initMidi():
     midiout.send_message([0xC3,127]) #Noise. Used gunshot. Poor but sometimes works.'
     midiout.send_message([0xC4,87]) #DPCM.'
 
-    #midiout.send_message([0xB0,100]) #'Square wave'
-    #midiout.send_message([0xB1,100]) #'Square wave'
-    #midiout.send_message([0xB2,100]) #Triangle wave
-    #midiout.send_message([0xB3,100]) #Noise. Used gunshot. Poor but sometimes works.'
 
-    #return midiout
-
-def updateSounds(f):
+def updateSounds():
     global apu
     apu.updateSounds()
     
@@ -755,23 +631,29 @@ def playmidi(APU):
 async def playfile(sf):
     global apu
     s = bytearray(np.fromfile(sf,dtype=np.uint8)).decode('utf8').split('\n')
-    for fsound in s:
+    for f,fsound in enumerate(s):
+        if not fsound:
+            break
         t=time.time()
         sdata = [int(i) for i in fsound.split(';')[1].split(',')]
-        f = uint32(fsound.split(';')[0])
+        #f = uint32(fsound.split(';')[0])
         cw = [int(i) for i in fsound.split(';')[2].split(',')]
 
         #print(f,sdata,cw)
         apu.Sound[0:0x100] = sdata
         apu.MMU.ChannelWrite[0:0x10] = cw
             
-        updateSounds(f)
+        updateSounds()
 
         playmidi(apu)
             
         while time.time()-t<0.016:
             pass
-
+        #print(sdata)
+        #print(cw)
+        #if f>20:break
+    stopmidi()
+    
 def loadfile(fn):
     f = bytearray(np.memmap(fn,dtype=np.uint8, mode = 'r')).decode('utf8').split('\n')
     return f
@@ -779,10 +661,17 @@ def loadfile(fn):
 
 
 def stopmidi():
-    midiout.send_message([0x80, 60, 0])
-    midiout.send_message([0x81, 60, 0])
-    midiout.send_message([0x82, 60, 0])
-    midiout.send_message([0x83, 60, 0])
+    apu.notes_on[0][3] = 0
+    apu.notes_on[1][3] = 0
+    apu.notes_on[2][3] = 0
+    apu.notes_on[3][3] = 0
+    apu.notes_on[4][3] = 0
+    midiout.send_message(apu.notes_on[0][1:])
+    midiout.send_message(apu.notes_on[1][1:])
+    midiout.send_message(apu.notes_on[2][1:])
+    midiout.send_message(apu.notes_on[3][1:])
+    midiout.send_message(apu.notes_on[4][1:])
+
 
 
 def GetFreq(channel):
@@ -798,17 +687,9 @@ if __name__ == '__main__':
     initMidi()
     #note_on = [0x93, 60, 112] # channel 1, middle C, velocity 112
     #note_off = [0x83, 60, 0]
-    #apu.midiout.send_message([192,127])
     #midiout.send_message(note_on)
     #time.sleep(0.5)
-    #midiout.send_message([0x90, 60, 8])
-    #time.sleep(3)
-    #c
-    #time.sleep(0.5)
-    #midiout.send_message([0x90, 60, 100])
-    #time.sleep(3)
-    #midiout.send_message([0x80, 60, 0])
-    #time.sleep(0.5)
+
     def sweepD(swp,length):
         s = length / swp
         for v in range(swp):
@@ -841,16 +722,16 @@ if __name__ == '__main__':
     #time.sleep(0.5)
     apu = APU()
     import asyncio
-    asyncio.run(playfile('sounddata.txt'))
+    asyncio.run(playfile('sounddata-kage.txt'))
 
     import pyglet
     
-    s = loadfile('sounddata.txt')
+    s = loadfile('sounddata-contra.txt')
     player = pyglet.media.Player()
     player.loop = True
     def my_playlist():
         length = 0
-        for i,fsound in enumerate(loadfile('sounddata.txt')):
+        for i,fsound in enumerate(loadfile('sounddata-contra.txt')):
             print(i)
             if length:
                 length -= 1
@@ -881,7 +762,7 @@ if __name__ == '__main__':
     #Triangle.play()
     
     length = 0
-    for  i,fsound in enumerate(loadfile('sounddata.txt')):
+    for  i,fsound in enumerate(loadfile('sounddata-b.txt')):
         #print(i)
         if length:
             length -= 1
