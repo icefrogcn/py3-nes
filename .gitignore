@@ -5,7 +5,9 @@ __pycache__/
 *.pyc
 *.nes
 
-sounddata.txt
+sounddata*.txt
+
+*debug*
 
 .vs
 
