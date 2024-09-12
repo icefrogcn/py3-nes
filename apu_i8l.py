@@ -321,7 +321,7 @@ class NOISE:
     
     def __init__(noise,MMU):
         noise.no = 3
-        noise.reg = MMU.RAM[2][0x11: 0x14]
+        noise.reg = MMU.RAM[2][0x0C: 0x10]
         
         noise.enable = 0
         noise.holdnote = 0
@@ -393,7 +393,7 @@ class DPCM:
     def __init__(dpcm,MMU):
         dpcm.no = 4
         
-        dpcm.reg = MMU.RAM[2][0xC: 0x10]
+        dpcm.reg = MMU.RAM[2][0x10: 0x14]
         
         dpcm.enable = 0
         dpcm.looping = 0
