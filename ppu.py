@@ -45,16 +45,18 @@ class PPU(object):
     #NT_BANK:ListType(uint8[::1])
 
     ScreenBuffer:uint8[:,:,::1]
+    gletBuffer:uint8[:,:,::1]
     #PalBuffer:uint8[:,:,::1]
     PTBuffer:uint8[:,:,::1]
     NTBuffer:uint8[:,:,::1]
     Running:uint8
-    render:uint8
+    
     tilebased:uint8
     #debug:uint8
     ScanlineSPHit:uint8[:]
 
-
+    render:uint8
+    
     showNT:uint8
     showPT:uint8
 
@@ -78,6 +80,7 @@ class PPU(object):
 
         self.ScreenArray = np.zeros((240, 256),np.uint8)
         self.ScreenBuffer = np.zeros((240, 256, 3),np.uint8)
+        self.gletBuffer = np.zeros((240, 256, 3),np.uint8)
         #self.PalBuffer = np.zeros((0x20, 3),np.uint8)
         self.ATarray = np.zeros((256, 256),np.uint8)
         #self.NT_BANK = List([np.zeros((240, 256),np.uint8) for i in range(4)])
@@ -262,7 +265,8 @@ class PPU(object):
 
         for i,ptr in enumerate(self.RowNT):
             line[i<<3: (i<<3) + 8] = self.NTline(self.GetPT_Tile_data(ptr | self.PPU_BGTBL_TILE_OFFSET))
-        return line
+            
+        return line[self.TileX:self.TileX+256]
 
     
     @property
@@ -311,25 +315,21 @@ class PPU(object):
         for i,data in enumerate(self.RowAT):
             if data:
                 line[i<<5: (i<<5) + 32] = self.ATline(data)
-        return line
+        return line[self.ATX:self.ATX+256]
         
     def RenderScanline(self,scanline):
         if scanline == 0:
             pass
             
-        elif scanline < 240:
+        elif self.render and scanline < 240:
             self.RenderBG(scanline)
             self.RenderSprites(scanline)
-
-        #if scanline > self.SpriteRAM[0] + 8:
-            #self.reg.reg[2] |=  0x40 #PPU_SPHIT_FLAG
-
-        #self.ScanlineSPHit[scanline] =  1 if self.reg.PPUSTATUS & self.reg.bit.PPU_SPHIT_FLAG else 0
+            
 
     def RenderBG(self,scanline):
         if self.IsBGON:#  and (scanline & 7 == 1 or ):
-            self.ScreenArray[scanline]  = self.RowNTline[self.TileX:self.TileX+256]
-            self.ScreenArray[scanline] |= self.RowATline[self.ATX:self.ATX+256]
+            self.ScreenArray[scanline]  = self.RowNTline
+            self.ScreenArray[scanline] |= self.RowATline
             #self.ScreenArray[scanline]  = self.RowNTTiles[self.TileY][self.TileX:self.TileX+256]
             #self.ScreenArray[scanline] |= self.RowATTiles[self.TileY][self.ATX:self.ATX+256]
             #self.ScreenArray[scanline:scanline + 8 - self.TileY] = self.RowNTTiles[self.TileY:][self.TileX:self.TileX+256]
@@ -673,21 +673,23 @@ class PPU(object):
             self.NTBuffer[:,256]  = np.array([0,255,0],np.uint8)
             self.NTBuffer[:,512]  = np.array([0,255,0],np.uint8)
 
-
-
  
     def paintScreen(self,isDraw = 1):
         if isDraw:
-            for i in range(240):
-                for j in range(256):
-                    self.ScreenBuffer[i, j] = self.Pal[self.Palettes[self.ScreenArray[i, j]]]
-
+            ScreenArray1 = np.flipud(self.ScreenArray)   #pyglet (0,0) downleft
+            #for i in range(240):
+            #    for j in range(256):
+            #        self.ScreenBuffer[i, j] = self.Pal[self.Palettes[ScreenArray1[i, j]]]
+            
+            for index,item in np.ndenumerate(ScreenArray1):
+                self.ScreenBuffer[index] = self.Pal[self.Palettes[item]]
+            
             'numba Unsupport'
             #for p in self.Palettes:
                 #self.ScreenBuffer[self.ScreenArray == p] = self.Pal[p]
             #for i in range(240):
             #    self.ScreenBuffer[i] = np.array([self.Pal(self.Palettes[p]) for p in self.ScreenArray[i]],np.uint8)
-
+    
     def paintPT(self,isDraw = 1):
         if isDraw and self.showPT:
             #TileBuff = np.zeros((8,8,3), np.uint8)
