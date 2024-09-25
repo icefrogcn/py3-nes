@@ -26,11 +26,13 @@ spec = [('Joypad',uint8[:]),
 @jitclass(spec)
 class JOYPAD(object):
     ren15fps:uint8[:]
+    padbitsync:uint16[:]
     
     def __init__(self):
         #self.consloe = consloe
         self.Joypad = np.full(0x8,0x40,np.uint8)
         self.padbit = np.zeros(0x4, np.uint16)
+        self.padbitsync = np.zeros(0x4, np.uint16)
         #self.Joypad = [0x00] * 0x8
         self.pad1bit = 0
         self.pad2bit = 0
@@ -128,16 +130,22 @@ class JOYPAD(object):
         self.pad4bit = self.padbit[3]
         
     def SyncSub(self):
-        self.padbit[0] = self.chk_Rapid(self.pad1bit)
+        self.padbit[0] = self.chk_Rapid(self.padbitsync[0])
         
     def chk_Rapid(self, padbit):
         if padbit & self.btn_AAA:
-            if self.padcnt[0,0] < 4:
-                if self.ren15fps[self.padcnt[0,0]]:
-                    padbit |= self.btn_A
-                self.padcnt[0,0] += 1
-            else:
+            
+            if self.padcnt[0,0] >= 4:
                 self.padcnt[0,0] = 0
+                
+            if self.ren15fps[self.padcnt[0,0]]:
+                padbit |= self.btn_A
+            else:
+                padbit &= ~self.btn_A
+
+            self.padcnt[0,0] += 1
+            
+                
         else:
             self.padcnt[0,0] = 0
 
@@ -145,12 +153,14 @@ class JOYPAD(object):
             if self.padcnt[0,1] < 4:
                 if self.ren15fps[self.padcnt[0,1]]:
                     padbit |= self.btn_B
+                else:
+                    padbit &= ~self.btn_B
                 self.padcnt[0,1] += 1
             else:
                 self.padcnt[0,1] = 0
         else:
             self.padcnt[0,1] = 0
-        return padbit
+        return padbit & 0xFF
     
     def Write(self,addr,data):
         if addr == 0x16:
@@ -170,7 +180,7 @@ class JOYPAD(object):
             data |= (self.pad3bit & 0x1) << 1
             self.pad3bit >>= 1
             
-        if addr == 0x4017:
+        elif addr == 0x4017:
             data = self.pad2bit & 0x1
             self.pad2bit >>= 1
 
@@ -196,7 +206,7 @@ def JOYPAD_PRESS(PAD_SET):
 
 
 def JOYPAD_CHK(JOYPAD):
-    JOYPAD.pad1bit = JOYPAD_PRESS(P1_PAD)
+    JOYPAD.padbitsync[0] = JOYPAD_PRESS(P1_PAD)
     JOYPAD.SyncSub()
     #print  'set pad1bit' , bin(CPU.JOYPAD.pad1bit)
 
