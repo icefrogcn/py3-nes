@@ -216,8 +216,7 @@ class PPU(object):
     @property
     def NT_addr(self):
         return self.loopy_v & 0b0000001111111111
-        #return self.vRow << 5
-        #return 0x400 * (self.NTnum ^ (0x2 if self.vRow > 30 else 0)) + (self.vRow << 5)
+
     @property
     def VRAM_BANK(self):
         return 8 | self.NTnum#((self.loopy_v & 0b0000110000000000) >> 10) ^ self.NTnum
@@ -238,8 +237,6 @@ class PPU(object):
 
     def GetPT_Tile_data(self,ptr):
         return self.PPU_MEM_BANK[(ptr>>6)][(ptr<<4) & 0x3F0 : ((ptr<<4)&0x3F0)+0x10]
-    #def GetPT_Tile_data(self,ptr):
-        #return self.PPU_MEM_BANK[(ptr>>6) | self.PPU_BGTBL_BANK][(ptr<<4) & 0x3F0 : ((ptr<<4)&0x3F0)+0x10]
 
 
     def NTTile(self,data):
@@ -477,13 +474,16 @@ class PPU(object):
 
         
     def paintBuffer(self):
-        [rows, cols] = self.NTArray.shape
-        for i in range(rows):
-            for j in range(cols):
-                self.NTBuffer[i, j] = self.Pal[self.Palettes[self.NTArray[i, j]]]
+        #[rows, cols] = self.NTArray.shape
+        #for i in range(rows):
+        #    for j in range(cols):
+        #        self.NTBuffer[i, j] = self.Pal[self.Palettes[self.NTArray[i, j]]]
+
+        for index,item in np.ndenumerate(self.NTArray):
+            self.NTBuffer[index] = self.Pal[self.Palettes[item]]
 
     def blitFrame(self):
-        self.paintBuffer(self.NTArray,self.Pal,self.Palettes)
+        self.paintBuffer()
 
     def RenderSpritesNT(self):
         if self.IsSPON:
@@ -493,6 +493,7 @@ class PPU(object):
 
     #@njit
     def CalcPatternTableTiles(self):
+        #for TileIndex in range(len(self.PatternTableTiles)):
         for TileIndex in range(len(self.PatternTableTiles)):
             page = TileIndex >> 6
             ptr = (TileIndex & 0x3F) << 4
@@ -665,9 +666,12 @@ class PPU(object):
     def paintVRAM(self,isDraw = 1):
         if isDraw and self.showNT:
             self.RenderVRAM()
-            for i in range(720):
-                for j in range(768):
-                    self.NTBuffer[i, j] = self.Pal[self.Palettes[self.NTArray[i, j]]]
+            #for i in range(720):
+            #    for j in range(768):
+            #        self.NTBuffer[i, j] = self.Pal[self.Palettes[self.NTArray[i, j]]]
+            for index,item in np.ndenumerate(self.NTArray):
+                self.NTBuffer[index] = self.Pal[self.Palettes[item]]
+                
             self.NTBuffer[240]  = np.array([0,255,0],np.uint8)
             self.NTBuffer[480]  = np.array([0,255,0],np.uint8)
             self.NTBuffer[:,256]  = np.array([0,255,0],np.uint8)
