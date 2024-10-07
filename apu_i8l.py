@@ -297,12 +297,12 @@ class NOISE:
     shift_reg:uint32
 
     'for render'
-    phaseacc:uint32
+    phaseacc:int32
     freq:uint32
-    len_count:uint32
+    len_count:int32
 
     nowvolume:uint32
-    output:uint32
+    output:int32
 
     'for envelope'
     env_fixed:uint8
@@ -327,7 +327,7 @@ class NOISE:
         noise.holdnote = 0
         noise.volume = 0
         noise.xor_tap = 0
-        noise.shift_reg = 0
+        noise.shift_reg = 0x4000
 
         'for render'
         noise.phaseacc = 0
@@ -351,6 +351,9 @@ class NOISE:
         noise.sync_holdnote = 0
         noise.dummy1 = 0
         noise.sync_len_count = 0
+        
+    def reset(noise):
+        noise.shift_reg = 0x4000
 
 @jitclass
 class DPCM:

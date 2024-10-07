@@ -1171,12 +1171,11 @@ class cpu6502(object):
             self.PPU.Write(address,value)
             #self.PPU.SpriteRAM = self.RAM[0][value * 0x100:value * 0x100 + 0x100]#self.bank0[value * 0x100:value * 0x100 + 0x100]
             #print self.PPU.SpriteRAM
-        elif addr in (0x16,0x17):
+        elif addr == 0x16:
             #print bin(value)
             self.JOYPAD.Write(addr,value)
-        #elif addr == 0x17:
-        #    pass
-        #    self.JOYPAD2.Joypad_Count_ZERO(addr)
+        elif addr == 0x17:
+            self.Sound[addr] = value
         else:
             pass
             #print addr
