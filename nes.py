@@ -7,11 +7,15 @@ import datetime
 
 
 from numba.experimental import jitclass
-from numba import uint8,uint16,uint32,uint64
+from numba import uint8,uint16,uint32,uint64,float32
 from numba.typed import Dict
 from numba import types
 import numpy as np
 import numba as nb
+
+import pyglet
+from pyglet.window import key
+
 
 from deco import *
 from jitcompile import jitObject,jitType
@@ -23,12 +27,6 @@ from jitcompile import jitObject,jitType
 Log_SYS('import MMU class')
 from mmu import MMU, jit_MMU_class
 
-
-POST_ALL_RENDER = 0
-PRE_ALL_RENDER  = 1
-POST_RENDER     = 2
-PRE_RENDER      = 3
-TILE_RENDER     = 4
 
 Log_SYS('import MAPPER class')
 from mmc import MMC
@@ -43,16 +41,25 @@ Log_SYS('import CPU CLASS')
 from cpu import CPU6502, jit_CPU_class
 
 
+Log_SYS('import APU CLASS')
+from apu import APU, initMidi,playmidi,stopmidi,SaveSounds,playsound,testsound
+
+Log_SYS('import JOYPAD CLASS')
+from joypad import JOYPAD,JOYPAD_CHK
+
+
 ScanlineCycles = 1364
 FETCH_CYCLES = 8
 HDrawCycles = 1024
 HBlankCycles = 340
 
-Log_SYS('import APU CLASS')
-from apu import APU
 
-Log_SYS('import JOYPAD CLASS')
-from joypad import JOYPAD
+POST_ALL_RENDER = 0
+PRE_ALL_RENDER  = 1
+POST_RENDER     = 2
+PRE_RENDER      = 3
+TILE_RENDER     = 4
+
 
 
 nes_spec = [
@@ -102,11 +109,11 @@ class NES(object):
         self.JOYPAD = JOYPAD()
         print(self.JOYPAD)
         
-        self.CPU = CPU6502(self.MMU, self.PPU, self.MAPPER, self.JOYPAD)
-        print(self.CPU)
-
         self.APU = APU(self.MMU)
         print(self.APU)
+
+        self.CPU = CPU6502(self.MMU, self.PPU, self.MAPPER, self.JOYPAD)
+        print(self.CPU)
 
 
         self.NES_scanline = 0
@@ -279,18 +286,20 @@ class NES(object):
         self.base_cycles = self.emul_cycles = 0
 
     def run(self,isDraw = 1):
-        self.Frames += self.EmulateFrame(isDraw)
-        self.APU.updateSounds() 
-        self.PPU.paintScreen(isDraw)
-        if self.PPU.showNT:
-            self.PPU.paintVRAM(isDraw)
-        if self.PPU.showPT:
-            self.PPU.paintPT(isDraw)
-        
-        #return self.Frames
+        Frames = 0
+        while True:
+            Frames += self.EmulateFrame(isDraw)
+            self.APU.updateSounds() 
+            self.PPU.paintScreen(isDraw)
+            if self.PPU.showNT:
+                self.PPU.paintVRAM(isDraw)
+            if self.PPU.showPT:
+                self.PPU.paintPT(isDraw)
+            
+            yield Frames
 
-
-def import_NES_class(jit = 1):
+    
+def jit_NES_class(jit = 1):
     
     global MAPPER
     MAPPER = jit_MAPPER_class(jit = jit)
@@ -315,63 +324,99 @@ def import_NES_class(jit = 1):
     return jitObject(NES, NES_spec , jit = jit)
 
 def load_NES(jit = 1):
-    nes_class = import_NES_class(jit)
+    nes_class = jit_NES_class(jit)
     return nes_class()    
 
-async def FPS():
-        loop = asyncio.get_running_loop()
-        end_time = loop.time() + 5.0
-        sf = nes.Frames
-        while True:
-            if (loop.time() + 1.0) >= end_time:
-                break
-            await asyncio.sleep(1)
-            t = time.time() - st
-            fps = (nes.Frames - sf) // t
-            cv2.setWindowTitle('Main',f'{fps}')
+
+class SCREEN(pyglet.window.Window):
+
+    isDraw:uint8
+    pad1bit:uint16
+    interval:float32
+    PowerON:uint8
+    
+    def __init__(self,nes):
+        super().__init__(width=256, height=240, visible=True,vsync = False)
+        self.NES = nes
+        self.isDraw = 1
+        self.pad1bit = 0
+
+        self.fps_display = pyglet.window.FPSDisplay(self)
+            #Player1   B     A     SE    ST    UP    DN    LF    RT    BBB   AAA
+        self.P1_PAD = [key.K,key.J,key.V,key.B,key.W,key.S,key.A,key.D,key.I,key.U]
+
+        self.interval = 0.00
+        self.PowerON = 0
+        print('HARDWARE Ready')
+
+        
+    def update(self,event):
+        if self.PowerON:
+            next(self.nesrun, self.isDraw)
+            #self.NES.run(self.isDraw)
+            self.JOYPAD_CHK()
+
+        
+            playsound(self.NES.APU,event)
+       
+        
+        
+    def on_key_press(self, symbol, modifiers):
+        for i,k in enumerate(self.P1_PAD):
+            if symbol == k:
+                self.pad1bit |= 1 << i
+
+        if symbol == key._1:
+            #print('1 press')
+            pass
+            #nes.PPU
+    def on_key_release(self, symbol, modifiers):
+        for i,k in enumerate(self.P1_PAD):
+            if symbol == k:
+                self.pad1bit &= ~(1 << i)
+                
+        if symbol == key.P:
+            self.run()
             
+        if symbol == key.R:
+            if self.PowerON == 1:
+                self.reset()
+            
+        if symbol == key._0:
+            print('POWER OFF')
+            self.PowerON = 0
+            pyglet.clock.unschedule(self.update)
+            pyglet.app.exit()
+            
+    def JOYPAD_CHK(self):
+        self.NES.JOYPAD.padbitsync[0] = self.pad1bit
+        self.NES.JOYPAD.SyncSub()
         
-async def show():
-        cv2.imshow("Main", nes.PPU.ScreenBuffer)
-        key = cv2.waitKey(1)
+    def on_draw(self):
+        if self.isDraw:
+            self.clear()
+            pyglet.image.ImageData(256,240,'BGR', self.NES.PPU.ScreenBuffer.ctypes.data).blit(0,0)
+
+        self.fps_display.draw()
+
+    def reset(self):
+        print('RESET HARDWARE')
+        self.PowerON = 0
+        self.NES.PowerON()
+        self.nesrun = self.NES.run(self.isDraw)
+        self.update(1)
+        self.PowerON = 1
         
-async def run():
-        while True:
-            nes.run()
-            JOYPAD_CHK(nes.JOYPAD)
-            playmidi(nes.APU)
-            await show()
-            #await FPS()
+    def run(self):
+        if self.PowerON == 0:
+            self.PowerON = 1
+            self.reset()
+            pyglet.clock.schedule_interval(self.update, 1.0/60.0)
+            pyglet.app.run()
+        
+
 if __name__ == '__main__':
-    from rom import LoadROM
-
     nes = load_NES(1)
-    #nes.insertCARD(LoadROM('roms//Sangokushi 2 - Hanou No Tairiku (J).nes'))
-    #nes.insertCARD(LoadROM('roms//魂斗罗1代 无限人+散弹枪.nes'))
-    #nes.insertCARD(LoadROM('roms//1944.nes'))
-    #nes.insertCARD(LoadROM('roms//1942.nes'))
-    nes.insertCARD(LoadROM('roms//kage.nes'))
-    #nes.insertCARD(LoadROM('roms//Dr Mario (JU).nes'))
-   
-    import cv2
-    cv2.namedWindow('Main', cv2.WINDOW_NORMAL)
-
-    nes.PowerON()
-
-    Frames = 0
-
-    from apu import initMidi,playmidi
-    import rtmidi
-
-    from joypad import JOYPAD_CHK
-    import keyboard
-
-    import asyncio
-    
-    initMidi()
-
-    
-    asyncio.run(run())      #协程模式运行
 
 
 
