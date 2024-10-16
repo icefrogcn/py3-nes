@@ -12,16 +12,10 @@ import spec
 from mmc import MMC
 
 
-mapper_spec = [#('MMC',MMC_type),
-        ('reg',uint8[:]),
-        ('irq_enable',uint8),
-        ('irq_counter',uint8),
-        ('irq_latch',uint8),
-        ('irq_clock',uint16),
-        ('irq_occur',uint8),
-        ('addrmask',uint16),
-        ('RenderMethod',uint8)
-        ]
+mapper_spec = []
+
+#Mapper023  Konami VRC2 type B
+
 @jitclass()
 class MAPPER(object):
     MMC: MMC

@@ -31,6 +31,8 @@ mapper_spec = [#('MMC',MAIN_class_type),
         ('scanline',uint16),
         ('RenderMethod',uint8)
         ]
+
+#Mapper004  Nintendo MMC3   
 @jitclass
 class MAPPER():
     MMC: MMC
