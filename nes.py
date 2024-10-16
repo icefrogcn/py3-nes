@@ -42,7 +42,7 @@ from cpu import CPU6502, jit_CPU_class
 
 
 Log_SYS('import APU CLASS')
-from apu import APU, initMidi,playmidi,stopmidi,SaveSounds,playsound,testsound
+from apu import APU, initMidi,playmidi,stopmidi,SaveSounds,playsound,testsound,MixerOut
 
 Log_SYS('import JOYPAD CLASS')
 from joypad import JOYPAD,JOYPAD_CHK
@@ -337,6 +337,7 @@ class SCREEN(pyglet.window.Window):
     
     def __init__(self,nes):
         super().__init__(width=256, height=240, visible=True,vsync = False)
+        self.label = pyglet.text.Label('pyNES')
         self.NES = nes
         self.isDraw = 1
         self.pad1bit = 0
@@ -352,14 +353,16 @@ class SCREEN(pyglet.window.Window):
         
     def update(self,event):
         if self.PowerON:
+            #t = time.time()
             next(self.nesrun, self.isDraw)
             #self.NES.run(self.isDraw)
-            self.JOYPAD_CHK()
+            self.JOYPAD_CHK(event)
 
-        
-            playsound(self.NES.APU,event)
-       
-        
+            #playsound(self.NES.APU,event)
+            #testsound(self.NES.APU,event).play()
+            MixerOut(self.NES.APU,event).play()
+            #self.output.queue(testsound(self.NES.APU,event))#.play()
+
         
     def on_key_press(self, symbol, modifiers):
         for i,k in enumerate(self.P1_PAD):
@@ -385,14 +388,14 @@ class SCREEN(pyglet.window.Window):
         if symbol == key._0:
             print('POWER OFF')
             self.PowerON = 0
-            pyglet.clock.unschedule(self.update)
             pyglet.app.exit()
             
-    def JOYPAD_CHK(self):
+    def JOYPAD_CHK(self,event):
         self.NES.JOYPAD.padbitsync[0] = self.pad1bit
         self.NES.JOYPAD.SyncSub()
         
     def on_draw(self):
+
         if self.isDraw:
             self.clear()
             pyglet.image.ImageData(256,240,'BGR', self.NES.PPU.ScreenBuffer.ctypes.data).blit(0,0)
@@ -409,9 +412,10 @@ class SCREEN(pyglet.window.Window):
         
     def run(self):
         if self.PowerON == 0:
-            self.PowerON = 1
             self.reset()
+            self.PowerON = 1
             pyglet.clock.schedule_interval(self.update, 1.0/60.0)
+
             pyglet.app.run()
         
 
