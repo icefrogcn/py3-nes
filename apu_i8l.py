@@ -152,21 +152,21 @@ class RECTANGLE:
     complement:uint8
 
     'for render'
-    phaseacc:uint32
+    phaseacc:int32
     freq:int32
-    freqlimit:uint32
-    adder:uint32
-    duty:uint32
-    len_count:uint32
+    freqlimit:int32
+    adder:int32
+    duty:int32
+    len_count:int32
 
-    nowvolume:uint32
+    nowvolume:int32
 
     'for envelope'
     env_fixed:uint8
     env_decay:uint8
     env_count:uint8
     dummy0:uint8
-    env_vol:uint32
+    env_vol:int32
 
     'for sweep'
     swp_on:uint8
@@ -182,7 +182,7 @@ class RECTANGLE:
     sync_enable:uint8
     sync_holdnote:uint8
     dummy2:uint8
-    sync_len_count:uint32
+    sync_len_count:int32
     
     def __init__(rect,MMU,no):
         rect.no = no
@@ -275,7 +275,7 @@ class TRIANGLE:
         tri.adder = 0
 
         tri.nowvolume = 0
-
+        
         'for sync'
         tri.sync_reg = np.zeros(4,np.uint8)
         tri.sync_counter_start = 0
@@ -284,6 +284,10 @@ class TRIANGLE:
         
         tri.sync_len_count = 0
         tri.sync_lin_count = 0
+        
+    @property
+    def volume(tri):
+        return 9
 
 @jitclass
 class NOISE:
@@ -354,7 +358,23 @@ class NOISE:
         
     def reset(noise):
         noise.shift_reg = 0x4000
+        
+    @property
+    def NoiseSamplerate(noise):
+        return int(1789772.5 / noise.freq)
+    
+    def NoiseShiftreg(noise,xor_tap):
+        bit0 = noise.shift_reg & 1
+        if( noise.shift_reg & xor_tap ):
+            bit14 = bit0^1
+        else:
+            bit14 = bit0^0
+        noise.shift_reg >>= 1
+        noise.shift_reg |= (bit14<<14)
+        return bit0^1
 
+            
+    
 @jitclass
 class DPCM:
     no: uint8

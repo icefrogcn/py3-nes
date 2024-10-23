@@ -348,6 +348,7 @@ class SCREEN(pyglet.window.Window):
 
         self.interval = 0.00
         self.PowerON = 0
+        self.mixer = MixerOut(self.NES.APU,1.0/59.94)
         print('HARDWARE Ready')
 
         
@@ -360,8 +361,8 @@ class SCREEN(pyglet.window.Window):
 
             #playsound(self.NES.APU,event)
             #testsound(self.NES.APU,event).play()
-            MixerOut(self.NES.APU,event).play()
-            #self.output.queue(testsound(self.NES.APU,event))#.play()
+            #MixerOut(self.NES.APU,event).play()
+            next(self.mixer).play()
 
         
     def on_key_press(self, symbol, modifiers):
