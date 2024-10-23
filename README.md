@@ -12,8 +12,9 @@ P1_PAD   'k','j','v','b','w','s','a','d','i','u'
 6. support MAPPER in mapper...
 
 #performance
-1. CPU: 5ms / frame
-2. PPU: 10~35ms / frame
+1. 30-60fps --- i3 6100U 2.3G
+2. 60fps --- i7 1165G7 4.2G
+
 
 #environment
 Python 3.12.2
@@ -22,6 +23,7 @@ numpy           1.26.4
 opencv-python   4.9.0.80
 keyboard        0.13.5
 python-rtmidi   1.5.8
+pyglet   2.0.18
 
 #reference
 VirtuaNES
