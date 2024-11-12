@@ -16,6 +16,7 @@ import numba as nb
 import pyglet
 from pyglet.window import key
 
+import win32com.directsound.directsound as Win32ds
 
 from deco import *
 from jitcompile import jitObject,jitType
@@ -42,7 +43,8 @@ from cpu import CPU6502, jit_CPU_class
 
 
 Log_SYS('import APU CLASS')
-from apu import APU, initMidi,playmidi,stopmidi,SaveSounds,playsound,testsound,MixerOut
+from apu import APU, initMidi,playmidi,stopmidi,SaveSounds,MixerOutRender,MixerOutData
+from directsound import DSBUFFERDESC
 
 Log_SYS('import JOYPAD CLASS')
 from joypad import JOYPAD,JOYPAD_CHK
@@ -348,7 +350,10 @@ class SCREEN(pyglet.window.Window):
 
         self.interval = 0.00
         self.PowerON = 0
-        self.mixer = MixerOut(self.NES.APU,1.0/59.94)
+        self.mixerRender = MixerOutRender(self.NES.APU,1.0/59.94)
+        self.mixerdata = MixerOutData(self.NES.APU)
+        pyglet.clock.schedule_interval(self.update, 1.0/60.0)
+
         print('HARDWARE Ready')
 
         
@@ -360,10 +365,12 @@ class SCREEN(pyglet.window.Window):
             self.JOYPAD_CHK(event)
 
             #playsound(self.NES.APU,event)
-            #testsound(self.NES.APU,event).play()
+            
             #MixerOut(self.NES.APU,event).play()
-            next(self.mixer).play()
+            #next(self.mixerRender).play()
 
+            DSBUFFERDESC.Update(0, bytes(next(self.mixerdata)))
+            DSBUFFERDESC.Play(1)
         
     def on_key_press(self, symbol, modifiers):
         for i,k in enumerate(self.P1_PAD):
@@ -401,7 +408,7 @@ class SCREEN(pyglet.window.Window):
             self.clear()
             pyglet.image.ImageData(256,240,'BGR', self.NES.PPU.ScreenBuffer.ctypes.data).blit(0,0)
 
-        self.fps_display.draw()
+            self.fps_display.draw()
 
     def reset(self):
         print('RESET HARDWARE')
@@ -415,8 +422,7 @@ class SCREEN(pyglet.window.Window):
         if self.PowerON == 0:
             self.reset()
             self.PowerON = 1
-            pyglet.clock.schedule_interval(self.update, 1.0/60.0)
-
+            
             pyglet.app.run()
         
 

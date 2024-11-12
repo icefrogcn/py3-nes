@@ -140,6 +140,10 @@ MIDI instrument list. Ripped off some website I've forgotten which
 126=Applause
 127=Gunshot
 '''
+vbl_lengths = np.array([ 5, 127,  10,   1,  19,   2,  40,  3,
+                        80,   4,  30,   5,   7,   6,  13,  7,
+                         6,   8,  12,   9,  24,  10,  48, 11,
+                        96,  12,  36,  13,   8,  14,  16, 15],np.uint8)
 
 @jitclass
 class RECTANGLE:
@@ -248,6 +252,8 @@ class TRIANGLE:
     
     nowvolume:int32
 
+    syncvolume:float32
+
 
     'for sync'
     sync_reg:uint8[:]
@@ -275,6 +281,7 @@ class TRIANGLE:
         tri.adder = 0
 
         tri.nowvolume = 0
+        tri.syncvolume = 0.0
         
         'for sync'
         tri.sync_reg = np.zeros(4,np.uint8)
@@ -293,7 +300,8 @@ class TRIANGLE:
 class NOISE:
     no:uint8
     reg:uint8[:]
-    
+    p_freq:uint16[:]
+        
     enable:uint8
     holdnote:uint8
     volume:uint8
@@ -307,6 +315,8 @@ class NOISE:
 
     nowvolume:uint32
     output:int32
+
+    dpcm_value:uint8
 
     'for envelope'
     env_fixed:uint8
@@ -322,11 +332,16 @@ class NOISE:
     sync_holdnote:uint8
     dummy1:uint8
     sync_len_count:uint32
+
+    cycle_rate:uint32
     
-    def __init__(noise,MMU):
+    def __init__(noise,MMU,cycle_rate):
         noise.no = 3
         noise.reg = MMU.RAM[2][0x0C: 0x10]
-        
+
+        noise.p_freq = np.array([4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068], np.uint16)
+
+
         noise.enable = 0
         noise.holdnote = 0
         noise.volume = 0
@@ -355,24 +370,79 @@ class NOISE:
         noise.sync_holdnote = 0
         noise.dummy1 = 0
         noise.sync_len_count = 0
+
+        noise.cycle_rate = cycle_rate
         
     def reset(noise):
         noise.shift_reg = 0x4000
+
+    def write(ch3):
+        ch3.holdnote    = ch3.reg[0]&0x20
+        ch3.volume      = ch3.reg[0]&0x0F
+        ch3.env_fixed   = ch3.reg[0]&0x10
+        ch3.env_decay   = (ch3.reg[0]&0x0F)+1
+
+        ch3.freq = ch3.p_freq[ch3.reg[2] & 0xF]
+        ch3.xor_tap = 0x40 if ch3.reg[2]&0x80 else 0x02
+            
+        ch3.len_count = vbl_lengths[ch3.reg[3] >> 3] * 2
+        ch3.env_vol = 0xF
+        ch3.env_count = ch3.env_decay+1
         
+    def update(ch3):
+        if (not ch3.enable) or ch3.len_count <= 0:
+            return
+        if not ch3.holdnote:
+            if ch3.len_count:
+                ch3.len_count -= 1
+        if ch3.env_count:
+            ch3.env_count -= 1
+        if ch3.env_count == 0:
+            ch3.env_count = ch3.env_decay
+
+            if ch3.holdnote:
+                ch3.env_vol = (ch3.env_vol-1)&0x0F
+            elif ch3.env_vol:
+                ch3.env_count -= 1
+        ch3.nowvolume = ch3.volume if ch3.env_fixed else ch3.env_vol 
+
     @property
-    def NoiseSamplerate(noise):
-        return int(1789772.5 / noise.freq)
-    
-    def NoiseShiftreg(noise,xor_tap):
-        bit0 = noise.shift_reg & 1
-        if( noise.shift_reg & xor_tap ):
+    def NoiseShiftreg(ch3):
+        bit0 = ch3.shift_reg & 1
+        if( ch3.shift_reg & ch3.xor_tap ):
             bit14 = bit0^1
         else:
             bit14 = bit0^0
-        noise.shift_reg >>= 1
-        noise.shift_reg |= (bit14<<14)
+        ch3.shift_reg >>= 1
+        ch3.shift_reg |= (bit14<<14)
         return bit0^1
+    
+    @property
+    def RenderNoise(ch3):
+        if (not ch3.enable) or ch3.len_count <= 0:
+            return 0.0
+        vol = 1#(256 - int((self.ch4.reg[1]&0x01) + self.ch4.dpcm_value * 2))/256
+        ch3.phaseacc -= ch3.cycle_rate
+        if( ch3.phaseacc >= 0 ):
+            return  ch3.output*vol
+        if( ch3.freq > ch3.cycle_rate ):
+            ch3.phaseacc += ch3.freq
+            ch3.output = ch3.nowvolume if( ch3.NoiseShiftreg) else -ch3.nowvolume
+            return  ch3.output*vol
 
+        num_times = 0
+        total = 0
+        while( ch3.phaseacc < 0 ):
+            ch3.phaseacc += ch3.freq
+            ch3.output = ch3.nowvolume if( ch3.NoiseShiftreg) else -ch3.nowvolume
+            total += ch3.output
+            num_times += 1
+
+        return  (total/num_times)*vol
+
+    def generator(self):
+        while True:
+            yield self.RenderNoise
             
     
 @jitclass

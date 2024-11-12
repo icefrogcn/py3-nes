@@ -1,12 +1,14 @@
 # -*- coding: UTF-8 -*-
 import traceback
-
-import numba as nb
-from numba.experimental import jitclass
-
 from deco import *
 
-def jitObject(classObject, Object_spec, ObjectAddition={}, jit = True):
+import platform
+if platform.python_version() < '3.13':
+    import numba as nb
+    from numba.experimental import jitclass
+
+
+def jitObject(classObject, Object_spec = [], ObjectAddition={}, jit = True):
     if jit:
         try:
             #if not hasattr(classObject, "class_type"):
