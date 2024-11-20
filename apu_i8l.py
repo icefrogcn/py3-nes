@@ -8,6 +8,9 @@ from numba import jit
 from numba.experimental import jitclass
 from numba import uint8,uint16,uint32,int8,int32,float32
 
+from mmu import MMU
+
+
 '''
 MIDI instrument list. Ripped off some website I've forgotten which
 
@@ -298,8 +301,9 @@ class TRIANGLE:
 
 @jitclass
 class NOISE:
+    MMU:MMU
     no:uint8
-    reg:uint8[:]
+    #reg:uint8[:]
     p_freq:uint16[:]
         
     enable:uint8
@@ -316,8 +320,7 @@ class NOISE:
     nowvolume:uint32
     output:int32
 
-    dpcm_value:uint8
-
+    
     'for envelope'
     env_fixed:uint8
     env_decay:uint8
@@ -334,10 +337,12 @@ class NOISE:
     sync_len_count:uint32
 
     cycle_rate:uint32
+
     
     def __init__(noise,MMU,cycle_rate):
+        noise.MMU = MMU
         noise.no = 3
-        noise.reg = MMU.RAM[2][0x0C: 0x10]
+        #noise.reg = MMU.RAM[2][0x0C: 0x10]
 
         noise.p_freq = np.array([4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068], np.uint16)
 
@@ -372,9 +377,16 @@ class NOISE:
         noise.sync_len_count = 0
 
         noise.cycle_rate = cycle_rate
+
+    @property
+    def reg(ch3):
+        return ch3.MMU.RAM[2][0x0C: 0x10]
+    @property
+    def ch4(ch3):
+        return ch3.MMU.RAM[2][0x10: 0x14]
         
-    def reset(noise):
-        noise.shift_reg = 0x4000
+    def reset(ch3):
+        ch3.shift_reg = 0x4000
 
     def write(ch3):
         ch3.holdnote    = ch3.reg[0]&0x20
@@ -418,23 +430,27 @@ class NOISE:
         return bit0^1
     
     @property
+    def dpcm_value(self):
+        return self.MMU.dpcm_value
+    
+    @property
     def RenderNoise(ch3):
         if (not ch3.enable) or ch3.len_count <= 0:
             return 0.0
-        vol = 1#(256 - int((self.ch4.reg[1]&0x01) + self.ch4.dpcm_value * 2))/256
+        vol = (256 - int((ch3.ch4[1]&0x01) + ch3.dpcm_value * 2))/256
         ch3.phaseacc -= ch3.cycle_rate
         if( ch3.phaseacc >= 0 ):
             return  ch3.output*vol
         if( ch3.freq > ch3.cycle_rate ):
             ch3.phaseacc += ch3.freq
-            ch3.output = ch3.nowvolume if( ch3.NoiseShiftreg) else -ch3.nowvolume
+            ch3.output = ch3.nowvolume if( ch3.NoiseShiftreg) else 0#-ch3.nowvolume
             return  ch3.output*vol
 
         num_times = 0
         total = 0
         while( ch3.phaseacc < 0 ):
             ch3.phaseacc += ch3.freq
-            ch3.output = ch3.nowvolume if( ch3.NoiseShiftreg) else -ch3.nowvolume
+            ch3.output = ch3.nowvolume if( ch3.NoiseShiftreg) else 0#-ch3.nowvolume
             total += ch3.output
             num_times += 1
 
@@ -447,13 +463,14 @@ class NOISE:
     
 @jitclass
 class DPCM:
+    MMU:MMU
     no: uint8
-    reg:uint8[:]
+    #reg:uint8[:]
     
     enable:uint8
     looping:uint8
     cur_byte:uint8
-    dpcm_value:uint8
+    #dpcm_value:uint8
 
     'for render'
     phaseacc:int32
@@ -484,9 +501,10 @@ class DPCM:
     sync_cache_dmalength:int32
     
     def __init__(dpcm,MMU):
+        dpcm.MMU = MMU
         dpcm.no = 4
         
-        dpcm.reg = MMU.RAM[2][0x10: 0x14]
+        #dpcm.reg = MMU.RAM[2][0x10: 0x14]
         
         dpcm.enable = 0
         dpcm.looping = 0
@@ -522,6 +540,17 @@ class DPCM:
         dpcm.sync_dmalength = 0
         dpcm.sync_cache_dmalength = 0
 
+    @property
+    def reg(dpcm):
+        return dpcm.MMU.RAM[2][0x10: 0x14]
+
+    @property
+    def dpcm_value(dpcm):
+        return dpcm.MMU.dpcm_value
+    @dpcm_value.setter
+    def dpcm_value(dpcm,value):
+        dpcm.MMU.dpcm_value = value
+    
     @property
     def holdnote(dpcm):
         return dpcm.looping

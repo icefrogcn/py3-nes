@@ -43,8 +43,8 @@ from cpu import CPU6502, jit_CPU_class
 
 
 Log_SYS('import APU CLASS')
-from apu import APU, initMidi,playmidi,stopmidi,SaveSounds,MixerOutRender,MixerOutData
-from directsound import DSBUFFERDESC
+from apu import APU, initMidi,playmidi,stopmidi,SaveSounds,MixerOutRender
+from directsound import dsbdesc#, DSBUFFERDESC
 
 Log_SYS('import JOYPAD CLASS')
 from joypad import JOYPAD,JOYPAD_CHK
@@ -351,9 +351,12 @@ class SCREEN(pyglet.window.Window):
         self.interval = 0.00
         self.PowerON = 0
         self.mixerRender = MixerOutRender(self.NES.APU,1.0/59.94)
-        self.mixerdata = MixerOutData(self.NES.APU)
+        self.mixerdata = self.NES.APU.MixerRenderData()
         pyglet.clock.schedule_interval(self.update, 1.0/60.0)
+        global DSBUFFERDESC
+        DSBUFFERDESC = dsbdesc(self.NES.APU.BufferSize * 1/60)
 
+        
         print('HARDWARE Ready')
 
         
@@ -370,7 +373,7 @@ class SCREEN(pyglet.window.Window):
             #next(self.mixerRender).play()
 
             DSBUFFERDESC.Update(0, bytes(next(self.mixerdata)))
-            DSBUFFERDESC.Play(1)
+            #DSBUFFERDESC.Play(1)
         
     def on_key_press(self, symbol, modifiers):
         for i,k in enumerate(self.P1_PAD):
@@ -422,7 +425,7 @@ class SCREEN(pyglet.window.Window):
         if self.PowerON == 0:
             self.reset()
             self.PowerON = 1
-            
+            DSBUFFERDESC.Play(1)
             pyglet.app.run()
         
 
