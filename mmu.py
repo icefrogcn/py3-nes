@@ -39,7 +39,8 @@ class MMU(object):
     SoundWrite:uint8[:]    
     exsound_select:uint8
 
-
+    dpcm_value:uint8
+        
     def __init__(mmu):
         mmu.RAM = np.zeros((8,0x2000), np.uint8)
         mmu.ROM = ROM()

@@ -33,7 +33,7 @@ def dsbdesc(duration = 1/60, rate = 22050, channels = 1, bits = 16 ):
     buffer = m_lpDS.CreateSoundBuffer(dsbdesc, None)
     return buffer
 
-DSBUFFERDESC = dsbdesc()
+#DSBUFFERDESC = dsbdesc()
 
 
 

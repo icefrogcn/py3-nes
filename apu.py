@@ -171,7 +171,7 @@ class APU(object):
 
     @property
     def BufferSize(self):
-        return 5
+        return 1
 
     @property
     def Sound(self):
@@ -190,11 +190,11 @@ class APU(object):
         self.MMU.SoundWrite[0x15] = 0
         return temp
 
-
+    '''
     def SoundChannel_ZERO(self,ch):
         self.SoundChannel[ch] = 0
     def SoundChannel_ONE(self,ch):
-        self.SoundChannel[ch] = 1
+        self.SoundChannel[ch] = 1'''
 
     def frameBuffer_decrement(self,ch):
         self.frameBuffer[ch] -= 1
@@ -250,12 +250,13 @@ class APU(object):
         if self.doSound :
             #print 'playing'
             self.ReallyStopTones()
-            self.updateReg4015()
-            self.PlayDMC(self.ch4)
             self.PlayRect(self.ch0)
             self.PlayRect(self.ch1)
             self.PlayTriangle(self.ch2)
             self.PlayNoise()
+            self.PlayDMC(self.ch4)
+            self.updateReg4015()
+            
             
         else:
             self.stopTone(0)
@@ -453,19 +454,13 @@ class APU(object):
         if (not ch.enable) or ch.len_count <=0:volume = 0
         if ch.len_count <= 0: volume = 0
         if ch.freq < 8 or ((not ch.swp_inc) and ch.freq > ch.freqlimit): volume = 0
-        #volume *= 0.00752 #
+        
         i = 0
         while True:
-            if period_length:
-                #vol = 1 if True else 1
-                output = int(i % period_length < duty_cycle) * 2.0 - 1.0
-        
-                #output = 1 if (i < duty_cycle) else -1
-                yield output * volume
-            else:
-                yield 0
+            output = (int(i % period_length < duty_cycle) * 2.0 - 1.0) if period_length else 0
+            yield output * volume
+
             i += 1.0
-            #if i > period_length: i = 0
             
 
 
@@ -536,7 +531,7 @@ class APU(object):
     def PlayTriangle(self,ch2):
         self.WriteTriangle(ch2)
         self.UpdateTriangle(ch2)
-        #self.RenderTriangle(ch2)
+
         self.playMidiTriangle(ch2)
 
         #if ch2.lin_count <= 0:
@@ -593,7 +588,7 @@ class APU(object):
         step = 4.0 * frequency / sample_rate
         value = 0.0#ch2.nowvolume
         volume = 0xF
-        vol = (256 - int((self.ch4.reg[1]&0x01) + self.ch4.dpcm_value * 2))/256
+        vol = 1#(256 - int((self.ch4.reg[1]&0x01) + self.ch4.dpcm_value * 2))/256
         if (not self.ch2.enable) or (self.ch2.len_count <= 0) or (self.ch2.lin_count <= 0) or (self.ch2.freq < 8):
            value = 0.0
            volume = 0
@@ -643,6 +638,10 @@ class APU(object):
         self.ch3.update()
 
         self.playMidiNoise(self.ch3)
+
+    def ch3_generator(self):
+        while True:
+            yield self.ch3.RenderNoise if self.m_bMute[4] else 0
             
     def noise_generator(self):
         period_length = int(sample_rate / self.WNoiseSamplerate)
@@ -701,13 +700,16 @@ class APU(object):
     def PlayDMC(self, ch4):
         if self.ChannelWrite[ch4.no]:
             self.WriteDMC(self.ch4)
-
+            self.ChannelWrite[ch4.no] = 0
+            
+        
         ch4.len_count = 1
         
         #self.RenderDMC(ch4)
         ch4.nowvolume = ch4.output
         
         #self.playfun(ch4)
+        
 
     def WriteDMC(self,ch4):
         ch4.freq = dpcm_cycles[(ch4.reg[0] & 0xF)]
@@ -721,12 +723,14 @@ class APU(object):
         'Sample length = %LLLL.LLLL0001 = (L * 16) + 1 bytes'
         ch4.cache_dmalength = ((ch4.reg[3]<<4)+1)#<<3
 
+        '''
         if(self.SoundCtrl(4) ):
             self.ch4.enable = 0xFF
             if( self.ch4.dmalength == 0):
                 self.ch4.address   = self.ch4.cache_addr
                 self.ch4.dmalength = self.ch4.cache_dmalength
                 self.ch4.phaseacc  = 0
+        '''
         
     def UpdateDMC(self,ch4):
         pass
@@ -753,7 +757,7 @@ class APU(object):
                         break
 
                 if( ch4.cur_byte&(1<<((ch4.dmalength&7)^7)) ):
-                    if ( ch4.dpcm_value < 0x7F ):
+                    if ( ch4.dpcm_value < 0x3F ):
                         ch4.dpcm_value += 1
                 else:
                     if ( ch4.dpcm_value >1 ):
@@ -770,11 +774,12 @@ class APU(object):
                 ch4.dpcm_output_fake -= 8
             ch4.output = int(ch4.dpcm_output_fake)#<<DPCM_VOL_SHIFT
             
-        return  int((ch4.reg[1]&0x01)+ch4.dpcm_value*2)#ch4.output
+        #return  int((ch4.reg[1]&0x01)+ch4.dpcm_value*2)
+        return  ch4.output
 
     def ch4_generator(self, sample_rate: float = 22050):
         while True:
-            yield self.RenderDMC(self.ch4) if self.m_bMute[self.ch4.no + 1] else 0
+            yield self.RenderDMC(self.ch4) if self.m_bMute[5] else 0
 
     def DMC_generator(self, sample_rate: float = 22050):
         ch4 = self.ch4
@@ -932,8 +937,8 @@ class APU(object):
         ch0 = self.ch01_generator(self.ch0)
         ch1 = self.ch01_generator(self.ch1)
         ch2 = self.ch2_generator()
-        ch3 = self.ch3.generator()
-        ch4 = self.DMC_generator()
+        ch3 = self.ch3_generator()
+        ch4 = self.ch4_generator()
 
         #ch4 = self.silence_generator()
         'HPF TEST'
@@ -945,8 +950,8 @@ class APU(object):
             pulse_out = 0.00752 * (next(ch0) + next(ch1))
             tnd_out = (0.00851 * next(ch2)) + (0.00494 * next(ch3)) + (0.00335 * next(ch4))
             m_in = pulse_out + tnd_out
-            #yield m_in * 2
-            #m_in = self.LPF(m_in)
+            
+            m_in = self.LPF(m_in)
             m_out = m_in - tmp
             tmp = tmp + cutoff * m_out
 
@@ -956,6 +961,7 @@ class APU(object):
             elif f_out < -1:
                 f_out = -1
             yield f_out
+            #yield m_in
 
     def MixerGeneratorAPI(self):
         ch0 = self.pulse_generator(self.ch0)
@@ -973,11 +979,11 @@ class APU(object):
             pulse_out = 0.00752 * (next(ch0) + next(ch1))
             tnd_out = (0.00851 * next(ch2)) + (0.00494 * next(ch3)) + (0.00335 * next(ch4))
             m_in = pulse_out + tnd_out
-            #yield m_in * 2
+            
             m_out = m_in - tmp
             tmp = tmp + cutoff * m_out
 
-            f_out = m_out
+            f_out = m_out * 2
             if f_out > 1:
                 f_out = 1
             elif f_out < -1:
@@ -992,9 +998,9 @@ class APU(object):
             yield np.array([int(0x7FFF * next(out)) for _ in range(samples)], dtype = np.int16)
 
     def MixerAPIData(self):
-        samples = int(sample_rate * self.BufferSize/60)
-        out = self.MixerGeneratorAPI()
         while True:
+            samples = int(sample_rate * self.BufferSize/60)
+            out = self.MixerGeneratorAPI()
             yield np.array([int(0x7FFF * next(out)) for _ in range(samples)], dtype = np.int16)
 
 
@@ -1058,13 +1064,7 @@ def pulse_generatorT(frequency: float, sample_rate: float, duty_cycle: float = 5
         i += 1.0
         
 
-def SaveSounds(APU):
-        with open('sounddata.txt','a') as f:
-            f.write('%d;%s' %(self.NES.CPU.Frames,','.join([str(i) for i in self.NES.APU.Sound])))
-            f.write(';%s' %(','.join([str(i) for i in self.NES.APU.ChannelStatus])))
-            f.write('\n')
-        
-            
+          
       
 
 'Calculates a midi tone given an nes frequency.'

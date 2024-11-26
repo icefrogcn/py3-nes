@@ -1129,14 +1129,13 @@ class CPU6502(object):
             self.SoundWrite[addr] = value
             
         if addr == 0x15:
-            #self.Sound[0x15] = value
             self.RAM[2][address & 0x1FFF] = value
 
         elif addr <= 0x13:
             self.RAM[2][address & 0x1FFF] = value
             n = addr >> 2
-            if n < 4 :
-                self.ChannelWrite[n] = 1
+            #if n <= 4 :
+            self.ChannelWrite[n] = 1
                       
             #self.APU.Write(addr,value)
                 

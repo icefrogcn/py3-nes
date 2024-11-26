@@ -437,7 +437,7 @@ class NOISE:
     def RenderNoise(ch3):
         if (not ch3.enable) or ch3.len_count <= 0:
             return 0.0
-        vol = (256 - int((ch3.ch4[1]&0x01) + ch3.dpcm_value * 2))/256
+        vol = 1#(256 - int((ch3.ch4[1]&0x01) + ch3.dpcm_value * 2))/256
         ch3.phaseacc -= ch3.cycle_rate
         if( ch3.phaseacc >= 0 ):
             return  ch3.output*vol
