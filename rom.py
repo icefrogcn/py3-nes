@@ -13,12 +13,17 @@ import numba as nb
 class ROM(object):
     data: uint8[::1]    #force array type C
     REG: uint16[:]
-        
+    name: uint8[:]
+
+    #VROM:uint8[:,::1]
     def __init__(self):#, data = np.zeros(0x20, np.uint8)):
         self.REG = np.zeros(0x10, np.uint16)
-
+        
         self.data = np.zeros(0x100020, np.uint8)
 
+        self.name = np.zeros(0x100, np.uint8)
+
+        #self.VROM = np.zeros(0x100,0x400, np.uint8)
 
     @property
     def NESHEADER_SIZE(self):
@@ -112,9 +117,14 @@ class ROM(object):
     def ROMCtrl2(self):
         return self.data[7]
 
-    
+    def insertCARD(self,data):
+        self.data = data[1]
+        self.name = data[0]
+        self.info()
+
+        
     def info(self):
-    
+        #print (self.name , " ROM OK")
         print ("[ " , self.PROM_16K_SIZE , " ] 16kB ROM Bank(s)")
         print ("[ " , self.VROM_8K_SIZE , " ] 8kB CHR Bank(s)")
         print ("[ " , self.ROMCtrl , " ] ROM Control Byte #1")
@@ -127,8 +137,8 @@ class ROM(object):
 
 class ROMHOUSE():
 
-    #ROMS_DIR = os.getcwd()+ '\\roms\\'
-    ROMS_DIR = 'F:\\individual_\\Amuse\\EMU\\FCSpec\\' 
+    ROMS_DIR = os.getcwd()+ '\\roms\\'
+    #ROMS_DIR = 'F:\\individual_\\Amuse\\EMU\\FCSpec\\' 
 
 
     def __init__(self):
@@ -188,13 +198,14 @@ class ROMHOUSE():
 def LoadROM(filename):
 
         data = np.fromfile(filename,dtype=np.uint8)
+        rom_name = filename.split("//")[1]
         
         if ''.join([chr(i) for i in data[:0x4]]) == 'NES\x1a':
             print(f'{filename} ROM OK!')
         else:
             print(f'{filename} Invalid Header')
             return 0
-        return data
+        return np.array(list(rom_name.encode('utf8')),dtype=np.uint8), data
         
 
 class nesjit():
@@ -211,9 +222,9 @@ class nesjit():
 
     
 if __name__ == '__main__':
-    #rom = ROM()
-    #rom.data = LoadROM('roms//Contra (J).nes')
-    #rom.info()
+    rom = ROM()
+    rom.insertCARD(LoadROM('roms//Contra (J).nes'))
+    
     ROMS = ROMHOUSE.roms_list
     ROMS_INFO = ROMHOUSE.get_roms_mapper(ROMS)
     ROMHOUSE.show_choose(ROMS_INFO)

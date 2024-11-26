@@ -43,7 +43,7 @@ from cpu import CPU6502, jit_CPU_class
 
 
 Log_SYS('import APU CLASS')
-from apu import APU, initMidi,playmidi,stopmidi,SaveSounds,MixerOutRender
+from apu import APU, initMidi,playmidi,stopmidi,MixerOutRender
 from directsound import dsbdesc#, DSBUFFERDESC
 
 Log_SYS('import JOYPAD CLASS')
@@ -260,8 +260,7 @@ class NES(object):
         return 1
 
     def insertCARD(self,data):
-        self.MMU.ROM.data = data
-        self.MMU.ROM.info()
+        self.MMU.ROM.insertCARD(data)
     
     def PowerON(self):
         LOGHW('NES Power ON')
@@ -365,6 +364,7 @@ class SCREEN(pyglet.window.Window):
             #t = time.time()
             next(self.nesrun, self.isDraw)
             #self.NES.run(self.isDraw)
+            #SaveSounds(self.NES)
             self.JOYPAD_CHK(event)
 
             #playsound(self.NES.APU,event)
@@ -374,6 +374,8 @@ class SCREEN(pyglet.window.Window):
 
             DSBUFFERDESC.Update(0, bytes(next(self.mixerdata)))
             #DSBUFFERDESC.Play(1)
+
+            
         
     def on_key_press(self, symbol, modifiers):
         for i,k in enumerate(self.P1_PAD):
@@ -381,9 +383,17 @@ class SCREEN(pyglet.window.Window):
                 self.pad1bit |= 1 << i
 
         if symbol == key._1:
-            #print('1 press')
-            pass
-            #nes.PPU
+            self.NES.APU.m_bMute[1] ^= 1
+        if symbol == key._2:
+            self.NES.APU.m_bMute[2] ^= 1
+        if symbol == key._3:
+            self.NES.APU.m_bMute[3] ^= 1
+        if symbol == key._4:
+            self.NES.APU.m_bMute[4] ^= 1
+        if symbol == key._5:
+            self.NES.APU.m_bMute[5] ^= 1
+        print(self.NES.APU.m_bMute)
+        
     def on_key_release(self, symbol, modifiers):
         for i,k in enumerate(self.P1_PAD):
             if symbol == k:
@@ -429,6 +439,15 @@ class SCREEN(pyglet.window.Window):
             pyglet.app.run()
         
 
+def SaveSounds(NES):
+        with open('sounddata-%s.txt' %bytes(NES.ROM.name).decode('utf8'),'a') as f:
+            f.write('%d;%s' %(NES.CPU.Frames,','.join([str(i) for i in NES.APU.Sound])))
+            f.write(';%s' %(','.join([str(i) for i in NES.APU.ChannelStatus])))
+            #f.write(';%s' %(','.join([str(i) for i in NES.MMU.SoundWrite])))
+            f.write('\n')
+        
+
+  
 if __name__ == '__main__':
     nes = load_NES(1)
 
