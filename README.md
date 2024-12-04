@@ -4,7 +4,7 @@ NES(FC) Emulator in Python 3.12.2 + jitclass
 #features
 1. cpu6502 running
 2. Limited graphics
-3. Limited sound support（ch0-3）
+3. Limited sound support（ch0-4）
 4. 1P control
 Player1   B   A  SE  ST  UP  DN  LF  RT  BBB AAA
 P1_PAD   'k','j','v','b','w','s','a','d','i','u'
