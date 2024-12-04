@@ -353,7 +353,7 @@ class SCREEN(pyglet.window.Window):
         self.mixerdata = self.NES.APU.MixerRenderData()
         pyglet.clock.schedule_interval(self.update, 1.0/60.0)
         global DSBUFFERDESC
-        DSBUFFERDESC = dsbdesc(self.NES.APU.BufferSize * 1/60)
+        DSBUFFERDESC = dsbdesc(self.NES.APU.BufferSize)
 
         
         print('HARDWARE Ready')
@@ -371,8 +371,10 @@ class SCREEN(pyglet.window.Window):
             
             #MixerOut(self.NES.APU,event).play()
             #next(self.mixerRender).play()
-
-            DSBUFFERDESC.Update(0, bytes(next(self.mixerdata)))
+            self.NES.APU.interval = event
+            next(self.mixerdata)
+            DSBUFFERDESC.Update(0, self.NES.APU.SoundBuffer.tobytes())
+            #DSBUFFERDESC.SetCurrentPosition(0)
             #DSBUFFERDESC.Play(1)
 
             
@@ -440,10 +442,13 @@ class SCREEN(pyglet.window.Window):
         
 
 def SaveSounds(NES):
-        with open('sounddata-%s.txt' %bytes(NES.ROM.name).decode('utf8'),'a') as f:
+    fn = 'sounddata-%s.txt' %bytes(NES.ROM.name).decode('utf8')
+    #if os.exists(fn):
+    #    os.remove(fn)
+    with open(fn,'a') as f:
             f.write('%d;%s' %(NES.CPU.Frames,','.join([str(i) for i in NES.APU.Sound])))
             f.write(';%s' %(','.join([str(i) for i in NES.APU.ChannelStatus])))
-            #f.write(';%s' %(','.join([str(i) for i in NES.MMU.SoundWrite])))
+            f.write(';%s' %(','.join([str(i) for i in NES.APU.SoundStatus])))
             f.write('\n')
         
 

@@ -12,7 +12,10 @@ import uuid
 import win32com.directsound.directsound as Win32ds
 import pywintypes
 
-def pcmwf(rate = 22050, channels = 1, bits = 16 ):
+from apu import sample_rate
+
+
+def pcmwf(rate = sample_rate, channels = 1, bits = 16 ):
     pcmwf = pywintypes.WAVEFORMATEX()
     pcmwf.wFormatTag = pywintypes.WAVE_FORMAT_PCM
     pcmwf.wBitsPerSample = bits
@@ -22,14 +25,15 @@ def pcmwf(rate = 22050, channels = 1, bits = 16 ):
     pcmwf.nAvgBytesPerSec = rate * pcmwf.nBlockAlign
     return pcmwf
 
-def dsbdesc(duration = 1/60, rate = 22050, channels = 1, bits = 16 ):
+def dsbdesc(BufferBytes, rate = sample_rate, channels = 1, bits = 16 ):
     m_lpDS = Win32ds.DirectSoundCreate(None, None)
     m_lpDS.SetCooperativeLevel(None, Win32ds.DSSCL_PRIORITY)
     dsbdesc = Win32ds.DSBUFFERDESC()
     dsbdesc.dwFlags       = Win32ds.DSBCAPS_LOCSOFTWARE | Win32ds.DSBCAPS_GETCURRENTPOSITION2 | Win32ds.DSBCAPS_GLOBALFOCUS #| Win32ds.DSBCAPS_CTRLPOSITIONNOTIFY
+    #dsbdesc.dwFlags       = Win32ds.DSBCAPS_LOCHARDWARE | Win32ds.DSBCAPS_GETCURRENTPOSITION2 | Win32ds.DSBCAPS_GLOBALFOCUS #| Win32ds.DSBCAPS_CTRLPOSITIONNOTIFY
     #dsbdesc.dwFlags      = Win32ds.DSBCAPS_PRIMARYBUFFER
     dsbdesc.lpwfxFormat   = pcmwf(rate = rate, channels = channels, bits = bits )
-    dsbdesc.dwBufferBytes = int(duration * dsbdesc.lpwfxFormat.nAvgBytesPerSec)
+    dsbdesc.dwBufferBytes = BufferBytes#int(duration * dsbdesc.lpwfxFormat.nAvgBytesPerSec)
     buffer = m_lpDS.CreateSoundBuffer(dsbdesc, None)
     return buffer
 

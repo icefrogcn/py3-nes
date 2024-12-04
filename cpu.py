@@ -1126,7 +1126,7 @@ class CPU6502(object):
         
         if addr < 0x18:
             self.CPUREG[addr] = value
-            self.SoundWrite[addr] = value
+            self.SoundWrite[addr] = 1
             
         if addr == 0x15:
             self.RAM[2][address & 0x1FFF] = value

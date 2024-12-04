@@ -151,8 +151,9 @@ vbl_lengths = np.array([ 5, 127,  10,   1,  19,   2,  40,  3,
 @jitclass
 class RECTANGLE:
     no:uint8
+    MMU:MMU
     
-    reg:uint8[:]
+    #reg:uint8[:]
     enable:uint8
     holdnote:uint8
     volume:uint8
@@ -192,8 +193,9 @@ class RECTANGLE:
     sync_len_count:int32
     
     def __init__(rect,MMU,no):
+        rect.MMU = MMU
         rect.no = no
-        rect.reg = MMU.RAM[2][no * 4: no * 4 + 0x4]
+        #rect.reg = MMU.RAM[2][no * 4: no * 4 + 0x4]
         rect.enable = 0
         rect.holdnote = 0
         rect.volume = 0
@@ -236,10 +238,18 @@ class RECTANGLE:
     def Sound(self):
         return 0
 
+    @property
+    def reg(rect):
+        return rect.MMU.RAM[2][rect.no * 4: rect.no * 4 + 0x4]
+    @property
+    def wReg(rect):
+        return rect.MMU.SoundWrite[rect.no * 4: rect.no * 4 + 0x4]
+
 @jitclass
 class TRIANGLE:
+    MMU:MMU
     no:uint8
-    reg:uint8[:]
+    #reg:uint8[:]
     
     enable:uint8
     holdnote:uint8
@@ -268,8 +278,9 @@ class TRIANGLE:
     sync_lin_count:uint32
     
     def __init__(tri,MMU):
+        tri.MMU = MMU
         tri.no = 2
-        tri.reg = MMU.RAM[2][0x8: 0xC]
+        #tri.reg = MMU.RAM[2][0x8: 0xC]
         
         tri.enable = 0
         tri.holdnote = 0
@@ -298,6 +309,12 @@ class TRIANGLE:
     @property
     def volume(tri):
         return 9
+    @property
+    def reg(tri):
+        return tri.MMU.RAM[2][0x8: 0xC]
+    @property
+    def wReg(tri):
+        return tri.MMU.SoundWrite[0x8: 0xC]
 
 @jitclass
 class NOISE:
@@ -382,6 +399,10 @@ class NOISE:
     def reg(ch3):
         return ch3.MMU.RAM[2][0x0C: 0x10]
     @property
+    def wReg(ch3):
+        return ch3.MMU.SoundWrite[0x0C: 0x10]
+    
+    @property
     def ch4(ch3):
         return ch3.MMU.RAM[2][0x10: 0x14]
         
@@ -389,17 +410,23 @@ class NOISE:
         ch3.shift_reg = 0x4000
 
     def write(ch3):
-        ch3.holdnote    = ch3.reg[0]&0x20
-        ch3.volume      = ch3.reg[0]&0x0F
-        ch3.env_fixed   = ch3.reg[0]&0x10
-        ch3.env_decay   = (ch3.reg[0]&0x0F)+1
-
-        ch3.freq = ch3.p_freq[ch3.reg[2] & 0xF]
-        ch3.xor_tap = 0x40 if ch3.reg[2]&0x80 else 0x02
+        if ch3.wReg[0]:
+            ch3.holdnote    = ch3.reg[0]&0x20
+            ch3.volume      = ch3.reg[0]&0x0F
+            ch3.env_fixed   = ch3.reg[0]&0x10
+            ch3.env_decay   = (ch3.reg[0]&0x0F)+1
+            ch3.wReg[0] = 0
             
-        ch3.len_count = vbl_lengths[ch3.reg[3] >> 3] * 2
-        ch3.env_vol = 0xF
-        ch3.env_count = ch3.env_decay+1
+        if ch3.wReg[2]:
+            ch3.freq = ch3.p_freq[ch3.reg[2] & 0xF]
+            ch3.xor_tap = 0x40 if ch3.reg[2]&0x80 else 0x02
+            ch3.wReg[2] = 0
+            
+        if ch3.wReg[3]:
+            ch3.len_count = vbl_lengths[ch3.reg[3] >> 3] * 2
+            ch3.env_vol = 0xF
+            ch3.env_count = ch3.env_decay+1
+            ch3.wReg[3] = 0
         
     def update(ch3):
         if (not ch3.enable) or ch3.len_count <= 0:
@@ -436,25 +463,25 @@ class NOISE:
     @property
     def RenderNoise(ch3):
         if (not ch3.enable) or ch3.len_count <= 0:
-            return 0.0
-        vol = 1#(256 - int((ch3.ch4[1]&0x01) + ch3.dpcm_value * 2))/256
+            return 0
+        #vol = 1#(256 - int((ch3.ch4[1]&0x01) + ch3.dpcm_value * 2))/256
         ch3.phaseacc -= ch3.cycle_rate
         if( ch3.phaseacc >= 0 ):
-            return  ch3.output*vol
+            return  ch3.output
         if( ch3.freq > ch3.cycle_rate ):
             ch3.phaseacc += ch3.freq
-            ch3.output = ch3.nowvolume if( ch3.NoiseShiftreg) else 0#-ch3.nowvolume
-            return  ch3.output*vol
+            ch3.output = ch3.nowvolume if( ch3.NoiseShiftreg) else 0
+            return  ch3.output
 
         num_times = 0
         total = 0
         while( ch3.phaseacc < 0 ):
             ch3.phaseacc += ch3.freq
-            ch3.output = ch3.nowvolume if( ch3.NoiseShiftreg) else 0#-ch3.nowvolume
+            ch3.output = ch3.nowvolume if( ch3.NoiseShiftreg) else 0
             total += ch3.output
             num_times += 1
 
-        return  (total/num_times)*vol
+        return  int(total/num_times)
 
     def generator(self):
         while True:
@@ -543,7 +570,10 @@ class DPCM:
     @property
     def reg(dpcm):
         return dpcm.MMU.RAM[2][0x10: 0x14]
-
+    @property
+    def wReg(dpcm):
+        return dpcm.MMU.SoundWrite[0x10: 0x14]
+    
     @property
     def dpcm_value(dpcm):
         return dpcm.MMU.dpcm_value

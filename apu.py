@@ -50,6 +50,8 @@ APU_CLOCK = 1789772.5
 sample_rate = nRate	= 22050
 cycle_rate = int((APU_CLOCK)/nRate) #<< 16
 
+nSamplesPerFrame = int(sample_rate/60)
+
 ' Volume shift'
 RECTANGLE_VOL_SHIFT=8
 TRIANGLE_VOL_SHIFT=9
@@ -72,11 +74,11 @@ DPCM_VOL_SHIFT=8
 nVolumeChannel = 0x10
 
 'Lookup table used by nester.'
-#fillArray vlengths, 
+#fillArray vlengths, half frame
 vbl_lengths = np.array([ 5, 127,  10,   1,  19,   2,  40,  3,
                         80,   4,  30,   5,   7,   6,  13,  7,
                          6,   8,  12,   9,  24,  10,  48, 11,
-                        96,  12,  36,  13,   8,  14,  16, 15],np.uint8)
+                        96,  12,  36,  13,   8,  14,  16, 15],np.uint8) * 2
 
 freq_limit = np.array([0x03FF, 0x0555, 0x0666, 0x071C, 0x0787, 0x07C1, 0x07E0, 0x07F0], np.uint16)
 
@@ -92,10 +94,8 @@ dpcm_cycles = np.array([
 	428, 380, 340, 320, 286, 254, 226, 214,
 	190, 160, 142, 128, 106,  85,  72,  54],np.uint16)
 
-#pulse_tone = np.zeros(0x800,np.uint16)
-#t21to95 = ['0x07F0', '0x077C', '0x0710', '0x06AC', '0x064C', '0x05F2', '0x059E', '0x054C', '0x0501', '0x04B8', '0x0474', '0x0434', '0x03F8', '0x03BE', '0x0388', '0x0356', '0x0326', '0x02F9', '0x02CF', '0x02A6', '0x0280', '0x025C', '0x023A', '0x021A', '0x01FC', '0x01DF', '0x01C4', '0x01AB', '0x0193', '0x017C', '0x0167', '0x0153', '0x0140', '0x012E', '0x011D', '0x010D', '0x00FE', '0x00EF', '0x00E2', '0x00D5', '0x00C9', '0x00BE', '0x00B3', '0x00A9', '0x00A0', '0x0097', '0x008E', '0x0086', '0x007E', '0x0077', '0x0071', '0x006A', '0x0064', '0x005F', '0x0059', '0x0054', '0x0050', '0x004B', '0x0047', '0x0043', '0x003F', '0x003B', '0x0038', '0x0035', '0x0032', '0x002F', '0x002C', '0x002A', '0x0028', '0x0026', '0x0024', '0x0022', '0x0020', '0x001E', '0x001C']
-#for t,freq in enumerate(t21to95):
-#    pulse_tone[eval(freq)] = t + 21
+pulse_table = np.array([95.52 / (8128.0 / (_ + 100)) for _ in range(32)],np.float64)
+tnd_table = np.array([163.67 / (24329.0 / (_ + 100)) for _ in range(204)],np.float64)
 
             
 @jitclass()
@@ -106,6 +106,8 @@ class APU(object):
     ch2:TRIANGLE
     ch3:NOISE
     ch4:DPCM
+
+    SoundStatus:uint8[:]
     
     tones:float32[:]
     volume:uint16[:]
@@ -121,7 +123,11 @@ class APU(object):
     wave_on:uint8[:]
     wave:float32[:,::1]
 
-    mixbuffer:int16[::1]
+    ch2wave:uint8[::1]
+    #SoundBuffer:int16[:,::1]
+    SoundBuffer:int16[::1]
+    CurrentPosition:uint32
+    interval:float32
     
     Frames:uint32
 
@@ -144,6 +150,8 @@ class APU(object):
         self.ch2 = TRIANGLE(self.MMU)
         self.ch3 = NOISE(self.MMU,cycle_rate)
         self.ch4 = DPCM(self.MMU)
+
+        self.SoundStatus = np.zeros(0x18,np.uint8)
         
         self.tones = np.zeros(nVolumeChannel,np.float32)
         self.volume = np.zeros(nVolumeChannel,np.uint16)
@@ -161,7 +169,13 @@ class APU(object):
         self.wave = np.zeros((nVolumeChannel,3),np.float32)
         self.wave_on = np.zeros(nVolumeChannel,np.uint8)
 
-        self.mixbuffer = np.zeros(int(sample_rate * 1/60), dtype = np.int16)
+        self.ch2wave = np.zeros(int(sample_rate * self.FramesSize/60), dtype = np.uint8)
+        #self.SoundBuffer = np.zeros((self.FramesSize,int(sample_rate /60)), dtype = np.int16)
+        self.SoundBuffer = np.zeros(self.FramesSize * int(sample_rate /60), dtype = np.int16)
+        self.CurrentPosition = 0
+        self.interval = 0.0
+
+        
         self.Frames = 0
 
         self.doSound = 1
@@ -170,8 +184,11 @@ class APU(object):
         self.lowpass_filter = np.zeros(4, dtype = np.float32)
 
     @property
+    def FramesSize(self):
+        return 4
+    @property
     def BufferSize(self):
-        return 1
+        return self.SoundBuffer.nbytes
 
     @property
     def Sound(self):
@@ -179,6 +196,9 @@ class APU(object):
     @property
     def ChannelWrite(self):
         return self.MMU.ChannelWrite
+    @property
+    def SoundWrite(self):
+        return self.MMU.SoundWrite
                 
     #@property
     def SoundCtrl(self,ch):
@@ -186,9 +206,14 @@ class APU(object):
     
     @property
     def Reg4015(self):
-        temp = self.MMU.SoundWrite[0x15]
-        self.MMU.SoundWrite[0x15] = 0
-        return temp
+        if self.SoundWrite[0x15]:
+            self.SoundWrite[0x15] = 0
+            return 1
+        else:
+            return 0
+
+        #self.MMU.SoundWrite[0x15] = 0
+        #return temp
 
     '''
     def SoundChannel_ZERO(self,ch):
@@ -244,6 +269,7 @@ class APU(object):
     
     def updateSounds(self):
         self.ChannelStatus = self.ChannelWrite.copy()
+        self.SoundStatus = self.SoundWrite.copy()
         
         #self.set_FRAMES(Frames)
         
@@ -256,6 +282,7 @@ class APU(object):
             self.PlayNoise()
             self.PlayDMC(self.ch4)
             self.updateReg4015()
+            
             
             
         else:
@@ -301,15 +328,17 @@ class APU(object):
             #self.stopTone(channel)
 
     def WriteRect(self,ch):
-        if self.ChannelWrite[ch.no]:
+        if ch.wReg[0]:
+            ch.wReg[0] = 0
             'addr 0'
             ch.holdnote     = ch.reg[0] & 0x20
             ch.env_fixed    = ch.reg[0] & 0x10
             ch.volume       = ch.reg[0] & 0x0F# if ch.env_fixed else 8
-            #ch.volume <<= 3
             ch.env_decay    = (ch.reg[0] & 0x0F) +1
             ch.duty         = duty_lut[ch.reg[0]>>6]
 
+        if ch.wReg[1]:
+            ch.wReg[1] = 0
             'addr 1'
             ch.swp_on = ch.reg[1] & 0x80
             ch.swp_inc = ch.reg[1] & 0x8
@@ -318,15 +347,21 @@ class APU(object):
             ch.swp_count = 0
             ch.freqlimit = freq_limit[ch.swp_shift]
             
+        if ch.wReg[2]:
+            ch.wReg[2] = 0
             'addr 2'
-            #ch.freq = ch.reg[2] + (ch.freq&~0xFF)
+            ch.freq = ((ch.reg[3]&0x7) << 8) + ch.reg[2]
 
+        if ch.wReg[3]:
+            ch.wReg[3] = 0
             'addr 3'
             ch.freq = ((ch.reg[3]&0x7) << 8) + ch.reg[2]#(ch.freq&0xFF)# + 1
-            ch.len_count = vbl_lengths[ch.reg[3] >> 3] * 2
+            ch.len_count = vbl_lengths[ch.reg[3] >> 3]
             ch.env_vol   = 0x0F
             ch.env_count = ch.env_decay+1
             ch.adder     = 0
+
+        if self.ChannelWrite[ch.no]:
             
             if(self.SoundCtrl(ch.no) ):
                 ch.enable    = 0xFF
@@ -404,10 +439,10 @@ class APU(object):
 
         return math.floor(volume * total/cycle_rate + 0.5)
         
-    def ch01_generator(self, ch:RECTANGLE, sample_rate: float = 22050):
+    def ch01_generator(self, ch:RECTANGLE, sample_rate: float = nRate):
         while True:
             output = 0
-            output += self.RenderRectangle_chg(ch)
+            output += self.RenderRectangle_new(ch)
             yield output if self.m_bMute[ch.no + 1] else 0
 
 
@@ -415,7 +450,7 @@ class APU(object):
     def PulseFreq(self, t):
         return 1789772.5/(16.0 * (t + 1))        
     
-    def RenderRectangle_chg(self, ch: RECTANGLE):
+    def RenderRectangle_new(self, ch: RECTANGLE):
         if (not ch.enable) or ch.len_count <=0:
             return 0
         if ch.freq < 8 or ((not ch.swp_inc) and ch.freq > ch.freqlimit):
@@ -500,32 +535,40 @@ class APU(object):
         
 
     def WriteTriangle(self,ch2):
-        if self.ChannelWrite[ch2.no]:
+        if ch2.wReg[0]:
+            ch2.wReg[0] = 0
             ch2.holdnote     = ch2.reg[0] & 0x80
-            'addr 2'
-            #ch.freq = (ch.freq&0xFFFF00) + ch.reg[2]
 
-            'addr 3'
-            ch2.freq = (((ch2.reg[3]&0x7) << 8) + ch2.reg[2]) #<< 1
-            ch2.len_count = vbl_lengths[ch2.reg[3] >> 3] #* 2
+            
+        if ch2.wReg[2]:
+            ch2.wReg[2] = 0
+            ch2.freq = ((ch2.reg[3]&0x7) << 8) + ch2.reg[2] #+ 1
+
+        if ch2.wReg[3]:
+            ch2.wReg[3] = 0
+            ch2.freq = ((ch2.reg[3]&0x7) << 8) + ch2.reg[2] #+ 1
+            ch2.len_count = vbl_lengths[ch2.reg[3] >> 3] * 2
             ch2.counter_start = 0x80
             
-            if(self.SoundCtrl(2) ):
-                ch2.enable    = 0xFF
+        if(self.SoundCtrl(2) ):
+            ch2.enable    = 0xFF
             
     def UpdateTriangle(self, ch2):
         if not ch2.enable:
             return
-        
+        if not ch2.holdnote:
+            if ch2.len_count:
+                ch2.len_count -= 1
+            
         if ch2.counter_start:
             ch2.lin_count = ch2.reg[0] & 0x7F
         elif ch2.lin_count:
-            ch2.lin_count -= 1
+            ch2.lin_count -= 4
+            
         if (not ch2.holdnote) and ch2.lin_count:
             ch2.counter_start = 0
             
-        if not ch2.holdnote:
-            ch2.len_count -= 1 
+
 
     
     def PlayTriangle(self,ch2):
@@ -538,29 +581,30 @@ class APU(object):
         #    ch2.len_count = 0
 
     def RenderTriangle(self,ch2):
-        vol = (256 - int((self.ch4.reg[1]&0x01) + self.ch4.dpcm_value * 2))/256
+        #vol = 1#(256 - int((self.ch4.reg[1]&0x01) + self.ch4.dpcm_value * 2))/256
         if (not ch2.enable) or (ch2.len_count <= 0) or (ch2.lin_count <= 0):
-            return ch2.nowvolume * vol# * 2 - 0xF
+            return ch2.nowvolume
         if (self.ch2.freq < 8):
-            return ch2.nowvolume * vol# * 2 - 0xF
+            return ch2.nowvolume
         
         ch2.phaseacc -= cycle_rate
         if ch2.phaseacc >= 0:
-            return ch2.nowvolume * vol# * 2 - 0xF
+            return ch2.nowvolume
         
-        if ch2.freq > cycle_rate:
-            ch2.phaseacc += ch2.freq 
+        freq = ch2.freq + 1
+        if freq > cycle_rate:
+            ch2.phaseacc += freq 
             if( ch2.adder < 0x10 ):
                 ch2.nowvolume = (ch2.adder^0x0F)#(ch2.adder&0x0F)<<TRIANGLE_VOL_SHIFT
             else:
                 ch2.nowvolume = (ch2.adder&0x0F)#(0x0F-(ch2.adder&0x0F))#<<TRIANGLE_VOL_SHIFT
             ch2.adder += 1
             ch2.adder &= 0x1F
-            return ch2.nowvolume * vol# * 2 - 0xF
+            return ch2.nowvolume
         num_times = 0
         total = 0
         while( ch2.phaseacc < 0):
-            ch2.phaseacc += ch2.freq 
+            ch2.phaseacc += freq 
             if( ch2.adder < 0x10 ):
                 ch2.nowvolume = (ch2.adder^0x0F)#(ch2.adder&0x0F)#<<TRIANGLE_VOL_SHIFT
             else:
@@ -570,9 +614,9 @@ class APU(object):
             total += ch2.nowvolume
             num_times += 1
         
-        return int(total/num_times) * vol #* 2 - 0xF
+        return int(total/num_times)
 
-    def ch2_generator(self, sample_rate: float = 22050):
+    def ch2_generator(self, sample_rate: float = nRate):
         while True:
             output =0
             output += self.RenderTriangle(self.ch2)
@@ -631,10 +675,11 @@ class APU(object):
         
         
     def PlayNoise(self):
-        if self.ChannelWrite[self.ch3.no]:
-            self.ch3.write()
-            if self.SoundCtrl(3):
+        self.ch3.write()
+
+        if self.SoundCtrl(3):
                 self.ch3.enable    = 0xFF
+
         self.ch3.update()
 
         self.playMidiNoise(self.ch3)
@@ -712,16 +757,24 @@ class APU(object):
         
 
     def WriteDMC(self,ch4):
-        ch4.freq = dpcm_cycles[(ch4.reg[0] & 0xF)]
-        ch4.looping = ch4.reg[0]&0x40
+        if ch4.wReg[0]:
+            ch4.wReg[0] = 0
+            ch4.freq = dpcm_cycles[(ch4.reg[0] & 0xF)]
+            ch4.looping = ch4.reg[0]&0x40
 
-        ch4.dpcm_value = (ch4.reg[1]&0x7F)>>1
+        if ch4.wReg[1]:
+            ch4.wReg[1] = 0
+            ch4.dpcm_value = (ch4.reg[1]&0x7F)>>1
 
-        'Sample address = %11AAAAAA.AA000000 = $C000 + (A * 64)'
-        ch4.cache_addr = 0xC000+(ch4.reg[2]<<6)
+        if ch4.wReg[2]:
+            ch4.wReg[2] = 0
+            'Sample address = %11AAAAAA.AA000000 = $C000 + (A * 64)'
+            ch4.cache_addr = 0xC000+(ch4.reg[2]<<6)
 
-        'Sample length = %LLLL.LLLL0001 = (L * 16) + 1 bytes'
-        ch4.cache_dmalength = ((ch4.reg[3]<<4)+1)#<<3
+        if ch4.wReg[3]:
+            ch4.wReg[3] = 0
+            'Sample length = %LLLL.LLLL0001 = (L * 16) + 1 bytes'
+            ch4.cache_dmalength = ((ch4.reg[3]<<4)+1)#<<3
 
         '''
         if(self.SoundCtrl(4) ):
@@ -774,14 +827,14 @@ class APU(object):
                 ch4.dpcm_output_fake -= 8
             ch4.output = int(ch4.dpcm_output_fake)#<<DPCM_VOL_SHIFT
             
-        #return  int((ch4.reg[1]&0x01)+ch4.dpcm_value*2)
-        return  ch4.output
+        return  int((ch4.reg[1]&0x01)+ch4.dpcm_value*2)
+        #return  ch4.output
 
-    def ch4_generator(self, sample_rate: float = 22050):
+    def ch4_generator(self, sample_rate: float = nRate):
         while True:
             yield self.RenderDMC(self.ch4) if self.m_bMute[5] else 0
 
-    def DMC_generator(self, sample_rate: float = 22050):
+    def DMC_generator(self, sample_rate: float = nRate):
         ch4 = self.ch4
         #volume = (ch4.reg[1]&0x01)+ ch4.dpcm_value*2)
         period_length = int(sample_rate / self.DMCfreq)
@@ -940,28 +993,63 @@ class APU(object):
         ch3 = self.ch3_generator()
         ch4 = self.ch4_generator()
 
-        #ch4 = self.silence_generator()
+        
+        'LOWPASS TEST'
+        next_sample = 0
+        prev_sample = 0
+
+        'Cancel DC offset'
+        ave = 0.0
+        DCmax=0.0
+        DCmin=0.0
+        delta = 0.0
+        
         'HPF TEST'
         cutofftemp = 2.0*3.141592653579*40.0 #Cut-off angular frequency
-        cutoff = cutofftemp/22050
-        tmp = 0.0
-        #out = 0.0
+        cutoff = cutofftemp/sample_rate
+        #samples = int(sample_rate * self.BufferSize/60)
+        lpf_out = 0.0
+        i = 0
         while True:
-            pulse_out = 0.00752 * (next(ch0) + next(ch1))
-            tnd_out = (0.00851 * next(ch2)) + (0.00494 * next(ch3)) + (0.00335 * next(ch4))
-            m_in = pulse_out + tnd_out
-            
-            m_in = self.LPF(m_in)
-            m_out = m_in - tmp
-            tmp = tmp + cutoff * m_out
+            #pulse_out = 0.00752 * (next(ch0) + next(ch1))
+            pulse_out = pulse_table[next(ch0) + next(ch1)]
+            ch2_out = next(ch2)
+            #self.ch2wave[i % samples] = ch2_out
+            tnd_out = tnd_table[3 * ch2_out + 2 * next(ch3) + next(ch4)]
 
-            f_out = m_out * 2
+            mix_out = pulse_out + tnd_out
+            '''
+            next_sample = mix_out
+            mix_out += prev_sample
+            mix_out /= 2
+            #next_sample = mix_out = (mix_out * 3 + prev_sample)/4
+            prev_sample = next_sample
+            
+            #mix_out = self.LPF(mix_out)
+
+            delta = (DCmax-DCmin)#/32768.0
+            DCmax -= delta
+            DCmin += delta
+            if( mix_out > DCmax ): DCmax = mix_out
+            if( mix_out < DCmin ): DCmin = mix_out
+            ave -= ave /1024.0
+            ave += (DCmax+DCmin) /2048.0
+            #mix_out -= ave
+
+        '''
+            mix_out -= lpf_out
+            lpf_out += mix_out * cutoff
+            
+            
+
+            f_out = mix_out# * 2
             if f_out > 1:
                 f_out = 1
             elif f_out < -1:
                 f_out = -1
             yield f_out
             #yield m_in
+            i += 1
 
     def MixerGeneratorAPI(self):
         ch0 = self.pulse_generator(self.ch0)
@@ -977,7 +1065,9 @@ class APU(object):
         #out = 0.0
         while True:
             pulse_out = 0.00752 * (next(ch0) + next(ch1))
-            tnd_out = (0.00851 * next(ch2)) + (0.00494 * next(ch3)) + (0.00335 * next(ch4))
+            pcm_out = next(ch4)
+            tnd_out = ((0.00851 * next(ch2)) + (0.00494 * next(ch3)))  * (1 - pcm_out / 256)
+            tnd_out += 0.00335 * pcm_out
             m_in = pulse_out + tnd_out
             
             m_out = m_in - tmp
@@ -992,10 +1082,36 @@ class APU(object):
     
     #@property
     def MixerRenderData(self):
-        samples = int(sample_rate * self.BufferSize/60)
+        #samples = int(sample_rate /60)
+        #samples = nSamplesPerFrame
         out = self.MixerGeneratorRender()
+        f = 0
+        temp = 0.0
+        end = 0
+        samples = 0
         while True:
-            yield np.array([int(0x7FFF * next(out)) for _ in range(samples)], dtype = np.int16)
+            temp += ((self.interval * sample_rate) - nSamplesPerFrame)
+            start = end
+            end += int(nSamplesPerFrame + int(temp))
+            samples = end - start
+            temp -= int(temp)
+            if end > self.SoundBuffer.size:
+                n = end % self.SoundBuffer.size
+                self.SoundBuffer[start:self.SoundBuffer.size] = np.array([int(0x7FFF * next(out)) for _ in range(self.SoundBuffer.size - start)], dtype = np.int16)
+                samples = n
+                start = 0
+                end = n
+                
+            self.SoundBuffer[start:end] = np.array([int(0x7FFF * next(out)) for _ in range(int(samples))], dtype = np.int16)
+            #self.SoundBuffer[f*nSamplesPerFrame:f*nSamplesPerFrame + nSamplesPerFrame] = np.array([int(0x7FFF * next(out)) for _ in range(nSamplesPerFrame)], dtype = np.int16)
+            #self.SoundBuffer[f] = np.array([int(0x7FFF * next(out)) for _ in range(samples)], dtype = np.int16)
+            
+
+            f += 1
+            if f == self.FramesSize:
+                f = 0
+            #self.SoundBuffer
+            yield 1
 
     def MixerAPIData(self):
         while True:
@@ -1144,15 +1260,15 @@ def playsound(APU,event):
 
     SynthesisOut(generator = APU.noise_generator(),
                                          duration = event).play()
-def MixerOutRender(APU,event):
+def MixerOutRender(APU,duration = 1/60):
     out = APU.MixerGeneratorRender()
     while True:
-        yield SynthesisOut(out,duration = event)
+        yield SynthesisOut(out,duration = APU.interval)
 
 
-def MixerOutAPI(APU,event):
+def MixerOutAPI(APU,duration = 1/60):
     while True:
-        yield SynthesisOut(APU.MixerGeneratorAPI(),duration = event)
+        yield SynthesisOut(APU.MixerGeneratorAPI(),duration = duration)
 
 def stopmidi(APU):
     APU.notes_on[0][3] = 0
@@ -1171,7 +1287,7 @@ def stopmidi(APU):
 class SynthesisOut(SynthesisSource):
     """Base class for synthesized waveforms.
     """
-    def __init__(self, generator, duration: float, sample_rate: int = 22050, envelope: Envelope | None = None):
+    def __init__(self, generator, duration: float, sample_rate: int = nRate, envelope: Envelope | None = None):
         super().__init__(generator, duration, sample_rate, envelope)
 
     def get_audio_data(self, num_bytes: int, compensation_time: float = 0.0) -> AudioData | None:
@@ -1195,7 +1311,7 @@ class SynthesisOut(SynthesisSource):
 class SynthesisOutT(SynthesisSource):
     """Base class for synthesized waveforms.
     """
-    def __init__(self, generator, duration: float, sample_rate: int = 22050, envelope: Envelope | None = None):
+    def __init__(self, generator, duration: float, sample_rate: int = nRate, envelope: Envelope | None = None):
         super().__init__(generator, duration, sample_rate, envelope)
 
     def get_audio_data(self, num_bytes: int, compensation_time: float = 0.0) -> AudioData | None:
